@@ -99,6 +99,9 @@ def _hdf2df(hdf_file, desired_subjects=None):
                 df['image'] = [img.astype(np.float64) for img in f[key]]
             else:
                 df[col] = f[key]
+                if col in ['subject', 'filename', 'stim_class', 'electrode1', 'electrode2', 'implant', 'date']:
+                    # convert from bytes to string
+                    df[col] = df[col].apply(lambda x: x.decode('utf-8'))
         dfs.append(df)
     dfs = pd.concat(dfs)
     f.close()
