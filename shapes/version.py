@@ -57,20 +57,20 @@ eScience Institute.
 """
 
 NAME = "shapes"
-MAINTAINER = "Ariel Rokem"
-MAINTAINER_EMAIL = "arokem@gmail.com"
+MAINTAINER = "Jacob Granley"
+MAINTAINER_EMAIL = "jgranley@ucsb.edu"
 DESCRIPTION = description
 LONG_DESCRIPTION = long_description
-URL = "http://github.com/uwescience/shapes"
+URL = "https://github.com/bionicvisionlab/Shapes/tree/master/shapes"
 DOWNLOAD_URL = ""
 LICENSE = "MIT"
-AUTHOR = "Ariel Rokem"
-AUTHOR_EMAIL = "arokem@gmail.com"
+AUTHOR = "Jacob Granley"
+AUTHOR_EMAIL = "jgranley@ucsb.edu"
 PLATFORMS = "OS Independent"
 MAJOR = _version_major
 MINOR = _version_minor
 MICRO = _version_micro
 VERSION = __version__
 PACKAGE_DATA = {'shapes': [pjoin('data', '*')]}
-REQUIRES = ["numpy"]
+REQUIRES = ["numpy", "h5py", "pandas"]
 PYTHON_REQUIRES = ">= 3.5"

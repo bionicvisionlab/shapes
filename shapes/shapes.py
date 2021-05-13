@@ -109,7 +109,7 @@ def _hdf2df(hdf_file, desired_subjects=None):
     return dfs
 
 
-def load_shapes(h5file, subjects=None, stim_class=None, implant=None,
+def load_shapes(h5file, subjects=None, stim_class=['SingleElectrode', 'MultiElectrode'], implant=None,
                 experimentID=None, shuffle=False, random_state=42):
     """
     Loads shapes from h5 file created from data-warehouse script
@@ -124,7 +124,8 @@ def load_shapes(h5file, subjects=None, stim_class=None, implant=None,
         or subject number (e.g. S2).
     stim_class : str | list of strings | None, optional
         Select data by stim_class. Options are 'MultiElectrode', 'SingleElectrode',
-        'SpatialSummation', 'Step' + desired_step, 'CDL0.35', 'CDL0.75'.
+        'SpatialSummation', 'Step' + desired_step, 'CDL0.35', 'CDL0.75'. Default is 
+        Single and Multi Electrode
     implant : 'ArgusI' | 'ArgusII' | None, optional
         Select data from either ArgusI or ArgusII implants. None will select
         both. You cannot select both by subject and by implant.
