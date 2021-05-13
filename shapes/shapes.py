@@ -150,23 +150,29 @@ def load_shapes(h5file, subjects=None, stim_class=['SingleElectrode', 'MultiElec
             raise ValueError("Implant must be one of 'ArgusI', 'ArgusII'")
         subjects = [k for k in subject_params.keys() if subject_params[k]['implant_type_str'] == implant]
     elif subjects is not None:
+        if type(subjects) == str:
+            subjects = [subjects]
         # Switch subject number to second sight ids
         alias = {subject_params[ssid]['subject_id']:ssid for ssid in subject_params.keys()}
         subjects = [alias[s] if s in alias.keys() else s for s in subjects]
         for s in subjects:
             if s not in subject_params.keys():
-                raise ValueError("Unknown subject: %s" % s)
+                raise ValueError("Unknown subject: " + s)
         
     df = _hdf2df(h5file, desired_subjects=subjects)
 
     if stim_class is not None:
         stim_classes = df['stim_class'].unique()
+        if type(stim_class) == str:
+            stim_class = [stim_class]
         for stim_c in stim_class:
             if stim_c not in stim_classes:
-                raise ValueError("Unknown stim_class: %s" % stim_c)
+                raise ValueError("Unknown stim_class: " + stim_c)
         df = df[df['stim_class'].isin(stim_class)]
     
     if experimentID is not None:
+        if type(experimentID) == str:
+            experimentID = [experimentID]
         # dont error here if one in list isn't present in df
         df = df[df['experiment'].isin(experimentID)]
 
