@@ -1,4 +1,4 @@
-## shapes
+## Shapes
 Helper module to load Argus user drawings from a h5 data file
 
 
