@@ -162,7 +162,9 @@ def load_shapes(h5file, subjects=None, stim_class=['SingleElectrode', 'MultiElec
     df = _hdf2df(h5file, desired_subjects=subjects)
 
     if stim_class is not None:
-        stim_classes = df['stim_class'].unique()
+        stim_classes = ['CDL0.35', 'CDL0.75', 'MultiElectrode', 'SingleElectrode', 'SpatialSummation',
+                        'Step1', 'Step1a', 'Step1b', 'Step1c', 'Step1d', 'Step2&3', 'Step2a', 'Step3',
+                        'Step4', 'Step5', 'Step6a']
         if type(stim_class) == str:
             stim_class = [stim_class]
         for stim_c in stim_class:
