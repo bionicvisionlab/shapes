@@ -185,13 +185,3 @@ def load_shapes(h5file, subjects=None, stim_class=['SingleElectrode', 'MultiElec
     if shuffle:
         df = df.sample(n=len(df), random_state=random_state)
     return df.reset_index(drop=True)
-
-
-def average_trials(df):
-    """
-    Takes in a dataframe, and contains logic for aggregating the different fields across trials. 
-    For example, some fields like 'image' and 'num_regions' should just be averaged, some fields
-    like 'amp' and 'freq' should be constant, some fields like 'filename' no longer make sense,
-    and some fields such as regionprops measurements should (maybe) be recalculated on the averaged images
-    """
-    pass
