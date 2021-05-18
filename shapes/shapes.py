@@ -99,7 +99,8 @@ def _hdf2df(hdf_file, desired_subjects=None):
                 df['image'] = [img.astype(np.float64) for img in f[key]]
             else:
                 df[col] = f[key]
-                if col in ['subject', 'filename', 'stim_class', 'electrode1', 'electrode2', 'implant', 'date']:
+                # It seems that H5py behaves differently on different systems, sometimes this comes out as a string, sometimes bytes
+                if col in ['subject', 'filename', 'stim_class', 'electrode1', 'electrode2', 'implant', 'date'] and type(df[col].iloc[0]) == bytes:
                     # convert from bytes to string
                     df[col] = df[col].apply(lambda x: x.decode('utf-8'))
         dfs.append(df)
@@ -184,3 +185,13 @@ def load_shapes(h5file, subjects=None, stim_class=['SingleElectrode', 'MultiElec
     if shuffle:
         df = df.sample(n=len(df), random_state=random_state)
     return df.reset_index(drop=True)
+
+
+def average_trials(df):
+    """
+    Takes in a dataframe, and contains logic for aggregating the different fields across trials. 
+    For example, some fields like 'image' and 'num_regions' should just be averaged, some fields
+    like 'amp' and 'freq' should be constant, some fields like 'filename' no longer make sense,
+    and some fields such as regionprops measurements should (maybe) be recalculated on the averaged images
+    """
+    pass
