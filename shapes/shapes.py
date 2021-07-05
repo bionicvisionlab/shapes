@@ -251,7 +251,7 @@ def save_shapes(df, h5_file, ignore_overwrite=False):
                                               dtype=np.int32))
         # Float data:
         for col in ['amp1', 'amp2', 'freq', 'pdur', 'x_center', 'y_center', 'orientation',
-                    'eccentricity', 'compactness']:
+                    'eccentricity', 'compactness', 'elec_delay']:
             file.create_dataset("%s.%s" % (subject, col),
                                 data=np.array([row[col]
                                                for (_, row) in data.iterrows()],
