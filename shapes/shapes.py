@@ -1,7 +1,9 @@
 import numpy as np
 import pandas as pd
 import h5py
+import skimage.measure as measure 
 
+from pulse2percept.utils import center_image
 
 try:
     import pandas as pd
@@ -187,16 +189,32 @@ def load_shapes(h5file, subjects=None, stim_class=['SingleElectrode', 'MultiElec
     return df.reset_index(drop=True)
 
 
-def average_trials(df):
+def average_images(images, do_thresh=False, thresh=0.5, return_list=False):
+    # averages images
+    if do_thresh:
+        img = (np.mean(images.apply(center_image), axis=0) > thresh).astype('float64')
+    else:
+        img = (np.mean(images.apply(center_image), axis=0)).astype('float64')
+    if return_list:
+        # this is mainly for pandas aggregration, which doesnt support ndarrays
+        return list(img)
+    return img
+
+def average_trials(df, groupby=['implant', 'subject', 'amp1', 'amp2', 'electrode1', 'electrode2', 'freq', 'pdur', 'stim_class'], 
+                   do_thresh=True, thresh=0.5):
     """
     Takes in a dataframe, and contains logic for aggregating the different fields across trials. 
-    For example, some fields like 'image' and 'num_regions' should just be averaged, some fields
-    like 'amp' and 'freq' should be constant, some fields like 'filename' no longer make sense,
-    and some fields such as regionprops measurements should (maybe) be recalculated on the averaged images
+    For example, some fields like 'image' and should be averaged, some fields
+    like 'amp' and 'freq' should be constant, and some fields like 'filename' no longer make sense,
     """
-    # TODO
-    pass
+    if not do_thresh:
+        thresh = 0.0
+    avg_df = df.reset_index().groupby(groupby).agg({'index' : 'unique', 'image' : lambda x: average_images(x, do_thresh=do_thresh, thresh=thresh, return_list=True)}).reset_index()
+    # convert images back to np arrays
+    avg_df['image'] = [np.array(x) for x in avg_df['image']]
+    avg_df['num_regions'] = [len(measure.regionprops(measure.label(x > thresh))) for x in avg_df['image']]
 
+    return avg_df
 
 def save_shapes(df, h5_file, ignore_overwrite=False):
     """
