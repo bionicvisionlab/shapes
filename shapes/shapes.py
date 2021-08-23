@@ -228,7 +228,7 @@ def average_trials(df, groupby=['implant', 'subject', 'amp1', 'amp2', 'electrode
 """ 
 TODO:   This could definitely be majorly sped up, should also be grouping by pulse_dur, stim_class, amp2, electrode2, 
 """
-def stack_images(df):
+def stack_phosphenes(df):
     """
     Stacks drawings even when the number of phosphenese is inconsistent across drawings
     Only works for single electrode stimulation that generates 1 or 2 phosphene(s) in each drawing
