@@ -226,7 +226,11 @@ def average_trials(df, groupby=['implant', 'subject', 'amp1', 'amp2', 'electrode
     return avg_df
 
 """ 
-TODO:   This could definitely be majorly sped up, should also be grouping by pulse_dur, stim_class, amp2, electrode2, 
+TODO:   This could be majorly sped up (don't worry about for now), 
+should also be grouping by pulse_dur, stim_class, amp2, electrode2, 
+and returning one stacked image (see issue #3)
+
+Once this is done, then update average_trials to call this instead
 """
 def stack_phosphenes(df):
     """
