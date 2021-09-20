@@ -5,3 +5,4 @@ pandas
 h5py
 pulse2percept
 scikit-image
+xlrd
