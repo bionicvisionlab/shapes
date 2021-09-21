@@ -335,6 +335,19 @@ def stack_phosphenes(df):
     stacked_image = (stacked_image.merge(df1, on=['group'])).drop(columns = ['group'])
     return stacked_image
 
+def find_image(image, df):
+    """
+    Find the index of the matching image in the new dataframe
+    Images don't always line up exactly, so it actually finds the
+    image with the smallest number of pixel mismatches (usually < 5 for matches)
+    """
+    def key_img_match(k):
+        new_img = df.loc[k, 'image']
+        if image.shape != new_img.shape:
+            return 999999999
+        return np.sum(image != new_img)
+    idx_matching = min(df.index, key = key_img_match)
+    return idx_matching
 
 def save_shapes(df, h5_file, ignore_overwrite=False):
     """
