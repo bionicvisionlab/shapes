@@ -335,7 +335,7 @@ def stack_phosphenes(df):
     stacked_image = (stacked_image.merge(df1, on=['group'])).drop(columns = ['group'])
     return stacked_image
 
-def find_image(image, df):
+def find_matching_image(image, df):
     """
     Find the index of the matching image in the new dataframe
     Images don't always line up exactly, so it actually finds the
