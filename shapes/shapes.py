@@ -242,33 +242,33 @@ def stack_phosphenes(df):
     Postcondition: If second argument is true, returns a dataframe that contains 8 columns: "subject", "electrode", "amplitude", "frequency", "pdur", "stim_class", "phosphene1_avg" (array) and "phosphene2_avg" (array) 
                 If second argument is false, returns a dataframe that contains 7 columns: "subject", "electrode", "amplitude", "frequency", "pdur", "stim_class", "combined_phosphene_avg" (array) 
     """
-    data = data.reset_index(drop=True)
+    df = df.reset_index(drop=True)
 
     # check if all columns are in the dataframe
-    if not (set(['image', 'subject', 'amplitude', 'pdur', 'stim_class', 'frequency', 'electrode']).issubset(list(data.columns))):
+    if not (set(['image', 'subject', 'amplitude', 'pdur', 'stim_class', 'frequency', 'electrode']).issubset(list(df.columns))):
         print("Missing one or more required column(s). Please check if the dataframe includes 'image', 'subject', 'amplitude', 'pdur', 'stim_class', 'frequency', 'electrode'")
         return
 
   # find the centroid of phosphene(s) in each drawing
-    if ('centroid1' not in data.columns) or ('centroid2' not in data.columns):
+    if ('centroid1' not in df.columns) or ('centroid2' not in df.columns):
         lst1 = []
         lst2 = []
         num_regions = []
-    for i in range(len(data)):
-      label_img = label(data['image'][i], connectivity = data['image'][i].ndim)
-      props = regionprops(label_img)
-      num_regions.append(len(props))
-      lst1.append(props[0].centroid)
-      if len(props) > 1:
-        lst2.append(props[1].centroid)
-      else:
-        lst2.append('')
+    for i in range(len(df)):
+        label_img = label(df['image'][i], connectivity = df['image'][i].ndim)
+        props = regionprops(label_img)
+        num_regions.append(len(props))
+        lst1.append(props[0].centroid)
+        if len(props) > 1:
+            lst2.append(props[1].centroid)
+        else:
+            lst2.append('')
 
-    data['centroid1'] = lst1
-    data['centroid2'] = lst2
-    data['num_regions'] = num_regions
+    df['centroid1'] = lst1
+    df['centroid2'] = lst2
+    df['num_regions'] = num_regions
 
-    data_temp = data[['subject','amplitude','frequency','electrode','centroid1','centroid2']].reset_index(drop=True)
+    data_temp = df[['subject','amplitude','frequency','electrode','centroid1','centroid2']].reset_index(drop=True)
     x = []
     y = []
     for i in range(len(data_temp)):
@@ -278,52 +278,52 @@ def stack_phosphenes(df):
     data_temp['y_avg'] = y
     data_temp = (data_temp[data_temp['centroid2'] == '']).drop(columns = ['centroid2'])
     df1 = data_temp.groupby(['subject','amplitude','frequency','electrode']).mean()
-    data = data.merge(df1, on=['subject','amplitude','frequency','electrode'])
+    df = df.merge(df1, on=['subject','amplitude','frequency','electrode'])
 
-    data['label'] = 1
-    data['group'] = ''
-    for i in range(len(data)):
-        data['group'][i] = data['subject'][i] + '_' + data['electrode'][i] + '_' + str(data['amplitude'][i]) + '_' + str(data['frequency'][i])
-        if data['centroid2'][i] != '':
-        label1 = np.mean([data['centroid1'][i][0]-data['x_avg'][i], data['centroid1'][i][1]-data['y_avg'][i]])
-        label2 = np.mean([data['centroid2'][i][0]-data['x_avg'][i], data['centroid2'][i][1]-data['y_avg'][i]])
-        if abs(label1) < abs(label2):
-            data['label'][i] = 1
-        else:
-            data['label'][i] = 2  
+    df['label'] = 1
+    df['group'] = ''
+    for i in range(len(df)):
+        df['group'][i] = df['subject'][i] + '_' + df['electrode'][i] + '_' + str(df['amplitude'][i]) + '_' + str(df['frequency'][i])
+        if df['centroid2'][i] != '':
+            label1 = np.mean([df['centroid1'][i][0]-df['x_avg'][i], df['centroid1'][i][1]-df['y_avg'][i]])
+            label2 = np.mean([df['centroid2'][i][0]-df['x_avg'][i], df['centroid2'][i][1]-df['y_avg'][i]])
+            if abs(label1) < abs(label2):
+                df['label'][i] = 1
+            else:
+                df['label'][i] = 2  
 
-    df1 = data[['subject','amplitude','frequency','electrode','group', 'pdur', 'stim_class']].drop_duplicates()
+    df1 = df[['subject','amplitude','frequency','electrode','group', 'pdur', 'stim_class']].drop_duplicates()
         
-    empty_array = np.zeros((len(data['image'][0]),len(data['image'][0][0])))
+    empty_array = np.zeros((len(df['image'][0]),len(df['image'][0][0])))
     stacked_image = []
-    for i in range(len(np.unique(data['group']))):
+    for i in range(len(np.unique(df['group']))):
         centroid1,centroid2 = 0,0
         img_list1 = []
         img_list2 = []
         avg_centroid1 = []
         avg_centroid2 = []
-        sub = data[(data.group == np.unique(data['group'])[i])].reset_index(drop=True)
+        sub = df[(df.group == np.unique(df['group'])[i])].reset_index(drop=True)
         for j in range(len(sub)):
-        if sub['num_regions'][j] == 1:
-            img_list1.append(center_image(label(sub['image'][j]) == 1))
-            img_list2.append(empty_array)
-            avg_centroid1.append(sub['centroid1'][j])
-            avg_centroid2.append((0,0))
-        else:
-            if sub['label'][j] == 1:
-            img_list1.append(center_image(label(sub['image'][j]) == 1))
-            img_list2.append(center_image(label(sub['image'][j]) == 2))
-            avg_centroid1.append(sub['centroid1'][j])
-            avg_centroid2.append(sub['centroid2'][j])
+            if sub['num_regions'][j] == 1:
+                img_list1.append(center_image(label(sub['image'][j]) == 1))
+                img_list2.append(empty_array)
+                avg_centroid1.append(sub['centroid1'][j])
+                avg_centroid2.append((0,0))
             else:
-            img_list1.append(center_image(label(sub['image'][j]) == 2))
-            img_list2.append(center_image(label(sub['image'][j]) == 1))
-            avg_centroid1.append(sub['centroid2'][j])
-            avg_centroid2.append(sub['centroid1'][j])
+                if sub['label'][j] == 1:
+                    img_list1.append(center_image(label(sub['image'][j]) == 1))
+                    img_list2.append(center_image(label(sub['image'][j]) == 2))
+                    avg_centroid1.append(sub['centroid1'][j])
+                    avg_centroid2.append(sub['centroid2'][j])
+                else:
+                    img_list1.append(center_image(label(sub['image'][j]) == 2))
+                    img_list2.append(center_image(label(sub['image'][j]) == 1))
+                    avg_centroid1.append(sub['centroid2'][j])
+                    avg_centroid2.append(sub['centroid1'][j])
         centroid1 = (sum([item[0] for item in avg_centroid1])/len([item[0] for item in avg_centroid1]), sum([item[1] for item in avg_centroid1])/len([item[1] for item in avg_centroid1]))
         if sum([item[0] for item in avg_centroid2]) != 0:
-        centroid2 = (sum([item[0] for item in avg_centroid2])/len([item[0] for item in avg_centroid2 if item[0] != 0]), sum([item[1] for item in avg_centroid2])/len([item[1] for item in avg_centroid2 if item[1] != 0]))
-        stacked_image.append([np.mean(img_list1,axis=0),np.mean(img_list2,axis=0),centroid1, centroid2, np.unique(data['group'])[i]])
+            centroid2 = (sum([item[0] for item in avg_centroid2])/len([item[0] for item in avg_centroid2 if item[0] != 0]), sum([item[1] for item in avg_centroid2])/len([item[1] for item in avg_centroid2 if item[1] != 0]))
+        stacked_image.append([np.mean(img_list1,axis=0),np.mean(img_list2,axis=0),centroid1, centroid2, np.unique(df['group'])[i]])
     stacked_image = pd.DataFrame(stacked_image,columns = ['phosphene1_avg','phosphene2_avg','centroid1','centroid2','group'])
     stacked_image = (stacked_image.merge(df1, on=['group'])).drop(columns = ['group'])
 
@@ -331,7 +331,7 @@ def stack_phosphenes(df):
     for i in range(len(stacked_image)):
         stacked_image['phosphene1_avg'][i] = shift_image(stacked_image['phosphene1_avg'][i],stacked_image['centroid1'][i][1]-256,stacked_image['centroid1'][i][0]-192)
         if stacked_image['centroid2'][i] != 0:
-        stacked_image['phosphene2_avg'][i] = shift_image(stacked_image['phosphene2_avg'][i], stacked_image['centroid2'][i][0]-256,stacked_image['centroid2'][i][1]-192)
+            stacked_image['phosphene2_avg'][i] = shift_image(stacked_image['phosphene2_avg'][i], stacked_image['centroid2'][i][0]-256,stacked_image['centroid2'][i][1]-192)
         combined_image.append(stacked_image['phosphene1_avg'][i] + stacked_image['phosphene2_avg'][i])
     stacked_image['combined_image'] = combined_image
     if separate_phosphenes:
