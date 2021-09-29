@@ -232,7 +232,7 @@ and returning one stacked image (see issue #3)
 
 Once this is done, then update average_trials to call this instead
 """
-def stack_phosphenes(df):
+def stack_phosphenes(df, separate_phosphenes=False):
     """
     Stacking drawings when the numbers of phosphenese are inconsistent across drawings (single electrode stimulation)
 
@@ -249,7 +249,7 @@ def stack_phosphenes(df):
         print("Missing one or more required column(s). Please check if the dataframe includes 'image', 'subject', 'amplitude', 'pdur', 'stim_class', 'frequency', 'electrode'")
         return
 
-  # find the centroid of phosphene(s) in each drawing
+    # find the centroid of phosphene(s) in each drawing
     if ('centroid1' not in df.columns) or ('centroid2' not in df.columns):
         lst1 = []
         lst2 = []
