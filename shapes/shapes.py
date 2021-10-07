@@ -234,19 +234,19 @@ Once this is done, then update average_trials to call this instead
 """
 def stack_phosphenes(df, separate_phosphenes=False):
     """
-    Stacking drawings when the numbers of phosphenese are inconsistent across drawings (single electrode stimulation)
+    Stacking drawings when the numbers of phosphenese are inconsistent across drawings 
 
-    Precondition: 1. A data frame that contains at least 7 columns: "subject" (string), "electrode" (string), "amplitude" (double), "frequency" (double), "image" (array), "pdur"(double), "stim_class"(string)
+    Precondition: 1. A data frame that contains at least these columns: "subject" (string), "electrode1" (string), "electrode2" (string), "amp1" (double), "amp2" (double), "freq" (double), "image" (array), "pdur"(double), "stim_class"(string)
                 2. (optional) a boolean value false by default.
                 Having two additional columns "centroid1" (tuple) and "centroid2" (tuple) that describes the centroids of two phosphenes will shrink the running time significantly
-    Postcondition: If second argument is true, returns a dataframe that contains 8 columns: "subject", "electrode", "amplitude", "frequency", "pdur", "stim_class", "phosphene1_avg" (array) and "phosphene2_avg" (array) 
-                If second argument is false, returns a dataframe that contains 7 columns: "subject", "electrode", "amplitude", "frequency", "pdur", "stim_class", "combined_phosphene_avg" (array) 
+    Postcondition: If second argument is true, returns the original dataframe plus two separate stacked phosphene arrays (one array represents one electrode)
+                If second argument is false, returns the original dataframe plus one phosphene array that shows the stacked image from two electrodes.
     """
     df = df.reset_index(drop=True)
 
     # check if all columns are in the dataframe
-    if not (set(['image', 'subject', 'amplitude', 'pdur', 'stim_class', 'frequency', 'electrode']).issubset(list(df.columns))):
-        print("Missing one or more required column(s). Please check if the dataframe includes 'image', 'subject', 'amplitude', 'pdur', 'stim_class', 'frequency', 'electrode'")
+    if not (set(['image', 'subject', 'amp1', 'amp2', 'pdur', 'stim_class', 'freq', 'electrode1','electrode2']).issubset(list(df.columns))):
+        print("Missing one or more required column(s). Please check if the dataframe includes 'image', 'subject', 'amp1', 'amp2', 'pdur', 'stim_class', 'freq', 'electrode1','electrode2'")
         return
 
     # find the centroid of phosphene(s) in each drawing
@@ -268,7 +268,7 @@ def stack_phosphenes(df, separate_phosphenes=False):
     df['centroid2'] = lst2
     df['num_regions'] = num_regions
 
-    data_temp = df[['subject','amplitude','frequency','electrode','centroid1','centroid2']].reset_index(drop=True)
+    data_temp = df[['subject','amp1','amp2','freq','electrode1','electrode2','centroid1','centroid2']].reset_index(drop=True)
     x = []
     y = []
     for i in range(len(data_temp)):
@@ -277,13 +277,13 @@ def stack_phosphenes(df, separate_phosphenes=False):
     data_temp['x_avg'] = x
     data_temp['y_avg'] = y
     data_temp = (data_temp[data_temp['centroid2'] == '']).drop(columns = ['centroid2'])
-    df1 = data_temp.groupby(['subject','amplitude','frequency','electrode']).mean()
-    df = df.merge(df1, on=['subject','amplitude','frequency','electrode'])
+    df1 = data_temp.groupby(['subject','amp1','amp2','freq','electrode1','electrode2']).mean()
+    df = df.merge(df1, on=['subject','amp1','amp2','freq','electrode1','electrode2'])
 
     df['label'] = 1
     df['group'] = ''
     for i in range(len(df)):
-        df['group'][i] = df['subject'][i] + '_' + df['electrode'][i] + '_' + str(df['amplitude'][i]) + '_' + str(df['frequency'][i])
+        df['group'][i] = df['subject'][i] + '_' + df['electrode1'][i] + '_' + df['electrode2'][i] + '_' + str(df['amp1'][i]) + '_' + str(df['amp2'][i]) + '_' + str(df['freq'][i])
         if df['centroid2'][i] != '':
             label1 = np.mean([df['centroid1'][i][0]-df['x_avg'][i], df['centroid1'][i][1]-df['y_avg'][i]])
             label2 = np.mean([df['centroid2'][i][0]-df['x_avg'][i], df['centroid2'][i][1]-df['y_avg'][i]])
@@ -292,7 +292,7 @@ def stack_phosphenes(df, separate_phosphenes=False):
             else:
                 df['label'][i] = 2  
 
-    df1 = df[['subject','amplitude','frequency','electrode','group', 'pdur', 'stim_class']].drop_duplicates()
+    df1 = df[['subject','amp1','amp2','freq','electrode1','electrode2','group', 'pdur', 'stim_class']].drop_duplicates()
         
     empty_array = np.zeros((len(df['image'][0]),len(df['image'][0][0])))
     stacked_image = []
