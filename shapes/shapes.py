@@ -1,3 +1,4 @@
+from re import sub
 import numpy as np
 import pandas as pd
 import h5py
@@ -5,6 +6,8 @@ import skimage.measure as measure
 from skimage.measure import label, regionprops
 
 from pulse2percept.utils import center_image, shift_image
+from pulse2percept.models import BiphasicAxonMapModel, AxonMapModel
+from pulse2percept.implants import ArgusI, ArgusII
 
 try:
     import pandas as pd
@@ -76,6 +79,50 @@ subject_params = {
     }
 }
 
+# TODO: Which eye?
+def model_from_params(subject_params, biphasic=True):
+    """ 
+    Creates an p2p.implants.Argus implant based on a dictionary of subject
+    specific implant parameters.
+    Parameters:
+    ------------
+    subject_params : dict
+        Dictionary of subject parameters. Must match the format of one of the subjects
+        in shapes.subject_params
+    biphasic: bool, optional
+        Use BiphasicAxonMapModel, as opposed to AxonMapModel. Defaults to true
+    
+    Returns:
+    -----------
+    implant : p2p.implants.ArgusI or p2p.implants.ArgusII
+        Specified implant with subject specific params
+    model :   p2p.models.BiphasicAxonMapModel
+        Subject specific model
+    """
+
+    implant_args = {
+        'x' : subject_params['implant_x'],
+        'y' : subject_params['implant_y'],
+        'rot' : subject_params['implant_rot']
+    }
+    model_args = {
+        'xrange' : (subject_params['xmin'], subject_params['xmax']),
+        'yrange' : (subject_params['ymin'], subject_params['ymax']),
+        'loc_od' : (subject_params['loc_od_x'], subject_params['loc_od_y'])
+    }
+    if biphasic:
+        model = BiphasicAxonMapModel(**model_args)
+    else:
+        model = AxonMapModel(**model_args)
+    if subject_params['implant_type_str'] == 'ArgusII':
+        implant = ArgusII(**implant_args)
+    elif subject_params['implant_type_str'] == 'ArgusI':
+        implant = ArgusI(**implant_args)
+    else:
+        raise ValueError("Unknown implant: " + subject_params['implant_type_str'])
+    
+    return implant, model
+
 def _hdf2df(hdf_file, desired_subjects=None):
     """Converts the data from HDF5 to a Pandas DataFrame"""
     f = h5py.File(hdf_file, 'r')
@@ -107,6 +154,17 @@ def _hdf2df(hdf_file, desired_subjects=None):
                 if col in ['subject', 'filename', 'stim_class', 'electrode1', 'electrode2', 'implant', 'date'] and type(df[col].iloc[0]) == bytes:
                     # convert from bytes to string
                     df[col] = df[col].apply(lambda x: x.decode('utf-8'))
+                if col in ['electrode1', 'electrode2']:
+                    # Change names to remove 0 padding:
+                    def remove_0s(electrode):
+                        if '0' not in electrode:
+                            return electrode
+                        idx = electrode.find('0')
+                        if electrode[:idx].isalpha():
+                            return electrode[:idx] + electrode[idx+1:]
+                        else:
+                            return electrode
+                    df[col] = df[col].apply(lambda x : remove_0s(x))
         dfs.append(df)
     dfs = pd.concat(dfs)
     f.close()
