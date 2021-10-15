@@ -76,11 +76,14 @@ class BiphasicAxonMapEstimator(BaseEstimator):
 
     def fit_size_model(self, df):
         """
-        Estimates size_model parameters (rho scaling) of a BiphasicAxonMapModel, A5 and A6
+        Estimates size_model parameters (rho scaling) of a BiphasicAxonMapModel, A5 and A6,
         based on drawings and amplitudes. 
         """
-        amps = np.array(df['amp']).reshape(-1, 1)
-        sizes = [self.get_props(image).area for image in df['image']]
+        self.fit_size_model(df['amp'], df['image'])
+    
+    def fit_size_model(self, x, y):
+        amps = np.array(x).reshape(-1, 1)
+        sizes = [self.get_props(image).area for image in y]
         if len(np.unique(amps)) < 2:
             print("Warning: Not enough uniqiue amps to fit effects model, using defaults")
             return
@@ -100,6 +103,9 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         self.model.a5 = self.a5
         self.model.a6 = self.a6
         self.model.build()
+
+        if self.verbose:
+            print('a5=%f, a6=%f' % (self.model.a5, self.model.a6))
 
 
     def fit(self, X, y=None, **fit_params):
