@@ -112,6 +112,8 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         self.model.set_params(fit_params)
         # update model with params sent to us from PSO
         self.model.set_params(self.get_params())
+        # Make sure 1.25 * a5 + a6 = 1
+        self.model.a6 = 1 - 1.25 * self.a5
         self.model.build()
         return self
 
