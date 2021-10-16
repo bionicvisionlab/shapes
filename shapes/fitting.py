@@ -79,11 +79,11 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         Estimates size_model parameters (rho scaling) of a BiphasicAxonMapModel, A5 and A6,
         based on drawings and amplitudes. 
         """
-        self.fit_size_model(df['amp'], df['image'])
+        self.fit_size_model(df['amp1'], df['image'])
     
     def fit_size_model(self, x, y):
         amps = np.array(x).reshape(-1, 1)
-        sizes = [self.get_props(image).area for image in y]
+        sizes = [self.get_props(image, threshold=None).area for image in y]
         if len(np.unique(amps)) < 2:
             print("Warning: Not enough uniqiue amps to fit effects model, using defaults")
             return
@@ -91,8 +91,8 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         # fit linear regression
         lr = LinearRegression()
         lr.fit(amps, sizes)
-        # rescale so that amp=1 is normalized
-        s_norm = lr.predict(np.array(1).reshape(1, -1))[0]
+        # rescale so that amp=1.25 is normalized
+        s_norm = lr.predict(np.array(1.25).reshape(1, -1))[0]
         sizes_scaled = sizes / s_norm
         lr = LinearRegression()
         lr.fit(amps, sizes_scaled)
@@ -152,7 +152,94 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         return score
         
         
+class AxonMapEstimator(BaseEstimator):
+    """
+    Estimates parameters for a AxonMapModel
+    
+    Parameters:
+    -------------
+    implant : p2p.implant, optional
+        A patient specific implant. Will default to ArgusII with no rotation.
+    model : p2p.models.AxonMapModel, optional
+        A patient specific model.
+    relative_weight : float, optional
+        Weight of size vs eccentricity for MSE loss function. Since size is much larger,
+        (especially when squared) this value defaults to be very small (10e-6)
+    """
+    def __init__(self, verbose=True, relative_weight=10e-6, implant=None,  model=None, **kwargs):
+        self.verbose = verbose
+        # Default to Argus II if no implant provided
+        self.implant = implant
+        if self.implant is None:
+            self.implant = ArgusII()
+        self.model = model
+        if self.model is None:
+            self.model = AxonMapModel(xystep=0.5)
+        self.model.build()
+        self.relative_weight = relative_weight
+        # Create all parameters here, but don't neccesarily need to use them all
+        self.rho = self.model.rho
+        self.axlambda = self.model.axlambda
+        self.set_params(**kwargs)
 
+
+    def get_params(self, deep=False):
+        params = {
+            attr : getattr(self, attr) for attr in \
+                ['rho', 'axlambda']
+        }
+        return params
+
+    def get_props(self, drawing, threshold=1):
+        """
+        Returns the regionprops region with the largest area
+        """
+        if threshold is not None:
+            props = regionprops(label(drawing > threshold))
+        else:
+            props = regionprops(label(drawing))
+        if len(props) == 0:
+            return None
+        return max(props, key=lambda x : x.area)
+
+    def fit(self, X, y=None, **fit_params):
+        self.model.set_params(fit_params)
+        # update model with params sent to us from PSO
+        self.model.set_params(self.get_params())
+        self.model.build()
+        return self
+
+    def predict(self, X):
+        y_pred = []
+        for row in X.itertuples():
+            self.implant.stim = Stimulus({row.electrode1 : BiphasicPulseTrain(row.freq, row.amp1, row.pdur, stim_dur=math.ceil(3*row.pdur))})
+            percept = self.model.predict_percept(self.implant)
+            y_pred.append(percept.get_brightest_frame())
+        return pd.Series(y_pred, index=X.index)
+
+    def score(self, X, y):
+        y_pred = self.predict(X)
+
+        for i in y_pred.index:
+            if y_pred[i].shape != y[i].shape:
+                # Not the same image size, so phosphene size comparison doesnt mean anything
+                y_pred[i] = resize(y_pred[i], y[i].shape)
+
+        # can easily change this to be pixel MSE, MS-SSIM, etc
+        # For now, weighted MSE between eccentricity and size
+        pred_moments = np.array([[prop.area, prop.eccentricity] if prop is not None else [0.0, 0.0] for prop in [self.get_props(p) for p in y_pred]])
+        # Consider moving this outside the loop if too slow
+        y_moments = np.array([[prop.area, prop.eccentricity] if prop is not None else [0.0, 0.0] for prop in [self.get_props(p, threshold=None) for p in y]])
+
+        score = np.mean(self.relative_weight * (pred_moments[:, 0] - y_moments[:, 0])**2 + (pred_moments[:, 1] - y_moments[:, 1])**2)
+
+        if self.verbose:
+            print('rho=%f, axlambda=%f, score=%f' % 
+                                            (self.model.rho,
+                                             self.model.axlambda,
+                                             score))
+
+        return score
 
 
     
