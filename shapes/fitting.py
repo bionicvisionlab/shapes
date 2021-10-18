@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import math
+import time
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import LinearRegression
 from skimage.measure import label, regionprops
@@ -28,7 +29,7 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         Weight of size vs eccentricity for MSE loss function. Since size is much larger,
         (especially when squared) this value defaults to be very small (10e-6)
     """
-    def __init__(self, verbose=True, relative_weight=10e-6, implant=None,  model=None, **kwargs):
+    def __init__(self, verbose=True, relative_weight=10e-6, implant=None, model=None, resize=True, **kwargs):
         self.verbose = verbose
         # Default to Argus II if no implant provided
         self.implant = implant
@@ -52,6 +53,7 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         self.a7 = self.model.a7
         self.a8 = self.model.a8
         self.a9 = self.model.a9
+        self.resize = resize
         self.set_params(**kwargs)
 
 
@@ -113,7 +115,8 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         # update model with params sent to us from PSO
         self.model.set_params(self.get_params())
         # Make sure 1.25 * a5 + a6 = 1
-        self.model.a6 = 1 - 1.25 * self.a5
+        self.a6 = 1 - 1.25 * self.a5
+        self.model.a6 = self.a6
         self.model.build()
         return self
 
@@ -126,37 +129,46 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         return pd.Series(y_pred, index=X.index)
 
     def score(self, X, y):
+        # start = time.time()
         y_pred = self.predict(X)
-
-        for i in y_pred.index:
-            if y_pred[i].shape != y[i].shape:
-                # Not the same image size, so phosphene size comparison doesnt mean anything
-                y_pred[i] = resize(y_pred[i], y[i].shape)
-
+        # print("predict: " + str(time.time() - start))
+        # start = time.time()
+        if self.resize:
+            for i in y_pred.index:
+                y_pred[i] = resize(y_pred[i], self.yshape)
+        # print("resize:  " + str(time.time() - start))
         # can easily change this to be pixel MSE, MS-SSIM, etc
         # For now, weighted MSE between eccentricity and size
         pred_moments = np.array([[prop.area, prop.eccentricity] if prop is not None else [0.0, 0.0] for prop in [self.get_props(p) for p in y_pred]])
-
+        # pred_moments[:, 0] /= y_pred[0].shape[0]*y_pred[0].shape[0]
         if len(y.shape) == 2 and y.shape[1] == 2:
             y_moments = y
         else:
         # Consider moving this outside the loop if too slow
             y_moments = np.array([[prop.area, prop.eccentricity] if prop is not None else [0.0, 0.0] for prop in [self.get_props(p, threshold=None) for p in y]])
-
-        score = np.mean(self.relative_weight * (pred_moments[:, 0] - y_moments[:, 0])**2 + (pred_moments[:, 1] - y_moments[:, 1])**2)
+        score_contrib = np.mean((pred_moments - y_moments)**2 , axis=0)
+        score = np.sum(score_contrib * [self.relative_weight, 1])
 
         if self.verbose:
-            print('rho=%f, axlambda=%f, a5=%f, a6=%f, score=%f' % 
+            print(('rho=%f, axlambda=%f, a5=%f, a6=%f, null_props=%.1f, score=%f, mses: ' + str(score_contrib) + ', weighted: ' + str(score_contrib * [self.relative_weight, 1])) % 
                                             (self.model.rho,
                                              self.model.axlambda,
                                              self.model.a5,
                                              self.model.a6,
+                                             np.sum(pred_moments==0) / 2,
                                              score))
 
         return score
 
-    def precompute_moments(self, y):
-        return np.array([[prop.area, prop.eccentricity] if prop is not None else [0.0, 0.0] for prop in [self.get_props(p, threshold=None) for p in y]])
+    def precompute_moments(self, y, shape=None):
+        if shape is not None:
+            y = [resize(img, shape) for img in y]
+        sizes = np.array([i.shape[0] * i.shape[1] for i in y])
+        props = [self.get_props(p, threshold=None) for p in y]
+        ret = np.array([[prop.area, prop.eccentricity] if prop is not None else [0.0, 0.0] for prop in props])
+        self.yshape = y[0].shape
+        # ret[:, 0] /= sizes
+        return ret
         
         
 class AxonMapEstimator(BaseEstimator):
@@ -173,7 +185,7 @@ class AxonMapEstimator(BaseEstimator):
         Weight of size vs eccentricity for MSE loss function. Since size is much larger,
         (especially when squared) this value defaults to be very small (10e-6)
     """
-    def __init__(self, verbose=True, relative_weight=10e-6, implant=None,  model=None, **kwargs):
+    def __init__(self, verbose=True, relative_weight=10e-6, implant=None,  model=None, resize=False, **kwargs):
         self.verbose = verbose
         # Default to Argus II if no implant provided
         self.implant = implant
@@ -185,6 +197,7 @@ class AxonMapEstimator(BaseEstimator):
         self.model.build()
         self.relative_weight = relative_weight
         # Create all parameters here, but don't neccesarily need to use them all
+        self.resize = resize
         self.rho = self.model.rho
         self.axlambda = self.model.axlambda
         self.set_params(**kwargs)
@@ -226,27 +239,37 @@ class AxonMapEstimator(BaseEstimator):
 
     def score(self, X, y):
         y_pred = self.predict(X)
-
-        for i in y_pred.index:
-            if y_pred[i].shape != y[i].shape:
-                # Not the same image size, so phosphene size comparison doesnt mean anything
-                y_pred[i] = resize(y_pred[i], y[i].shape)
+        # for i in y_pred.index:
+        #     if y_pred[i].shape != y[i].shape:
+        #         # Not the same image size, so phosphene size comparison doesnt mean anything
+        #         y_pred[i] = resize(y_pred[i], y[i].shape)
 
         # can easily change this to be pixel MSE, MS-SSIM, etc
         # For now, weighted MSE between eccentricity and size
         pred_moments = np.array([[prop.area, prop.eccentricity] if prop is not None else [0.0, 0.0] for prop in [self.get_props(p) for p in y_pred]])
-        # Consider moving this outside the loop if too slow
-        y_moments = np.array([[prop.area, prop.eccentricity] if prop is not None else [0.0, 0.0] for prop in [self.get_props(p, threshold=None) for p in y]])
 
-        score = np.mean(self.relative_weight * (pred_moments[:, 0] - y_moments[:, 0])**2 + (pred_moments[:, 1] - y_moments[:, 1])**2)
+        if len(y.shape) == 2 and y.shape[1] == 2:
+            y_moments = y
+        else:
+        # Consider moving this outside the loop if too slow
+            y_moments = np.array([[prop.area, prop.eccentricity] if prop is not None else [0.0, 0.0] for prop in [self.get_props(p, threshold=None) for p in y]])
+        
+        score_contrib = np.mean((pred_moments - y_moments)**2 , axis=0)
+        score = np.sum(score_contrib * [self.relative_weight, 1])
 
         if self.verbose:
-            print('rho=%f, axlambda=%f, score=%f' % 
+            print(('rho=%f, axlambda=%f, null_props=%f, score=%f, mses: ' + str(score_contrib) + ', weighted: ' + str(score_contrib * [self.relative_weight, 1])) % 
                                             (self.model.rho,
                                              self.model.axlambda,
+                                             np.sum(pred_moments==0) / 2,
                                              score))
 
         return score
+
+    def precompute_moments(self, y, shape=None):
+        if shape is not None:
+            y = [resize(img, shape) for img in y]
+        return np.array([[prop.area, prop.eccentricity] if prop is not None else [0.0, 0.0] for prop in [self.get_props(p, threshold=None) for p in y]])
 
 
     
