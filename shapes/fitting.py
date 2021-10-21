@@ -132,6 +132,14 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         # start = time.time()
         y_pred = self.predict(X)
         # print("predict: " + str(time.time() - start))
+
+        if len(y.shape) == 2 and y.shape[1] == 2:
+            y_moments = y
+        else:
+        # Consider moving this outside the loop if too slow
+            y_moments = np.array([[prop.area, prop.eccentricity] if prop is not None else [0.0, 0.0] for prop in [self.get_props(p, threshold=None) for p in y]])
+            self.yshape = y[0].shape
+
         # start = time.time()
         if self.resize:
             for i in y_pred.index:
@@ -141,11 +149,7 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         # For now, weighted MSE between eccentricity and size
         pred_moments = np.array([[prop.area, prop.eccentricity] if prop is not None else [0.0, 0.0] for prop in [self.get_props(p) for p in y_pred]])
         # pred_moments[:, 0] /= y_pred[0].shape[0]*y_pred[0].shape[0]
-        if len(y.shape) == 2 and y.shape[1] == 2:
-            y_moments = y
-        else:
-        # Consider moving this outside the loop if too slow
-            y_moments = np.array([[prop.area, prop.eccentricity] if prop is not None else [0.0, 0.0] for prop in [self.get_props(p, threshold=None) for p in y]])
+        
         score_contrib = np.mean((pred_moments - y_moments)**2 , axis=0)
         score = np.sum(score_contrib * [self.relative_weight, 1])
 
