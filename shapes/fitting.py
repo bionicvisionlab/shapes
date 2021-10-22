@@ -26,11 +26,22 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         A patient specific implant. Will default to ArgusII with no rotation.
     model : p2p.models.BiphasicAxonMapModel, optional
         A patient specific model.
-    relative_weight : float, optional
-        Weight vector of relative weighting on each loss param. 
-        Defaults to 
+    mse_params: list of skimage regionprops params, optional
+        The parameters to use to compute MSE. Each must be a valid parameter of skimage.measure.regionprops
+        Defaults to ellipse major and minor axis.
+        Note that due to scale differences between parameters, each will be transformed to have mean 0 and variance 1
+    feature_importance : list of floats, optional
+        Relative MSE weight for each loss param. 
+        Note that this applies AFTER scaling mean to 0 and variance to 1 (if scale_features is true). 
+        Thus, a value of 2 means the corresponding feature is twice as important as any feature with value 1
+        Defaults to equal weighting
+    scale_features : bool, optional
+        Whether or not to scale features to have 0 mean and 1 variance. 
+        Defaults to true
+        Warning: If this is false, then feature_importances should be updated to reflect the difference in scale
+        between different features
     """
-    def __init__(self, verbose=True, feature_importance=None, implant=None, model=None, resize=True, mse_params=None, scale_features=True, **kwargs):
+    def __init__(self, verbose=True, mse_params=None, feature_importance=None, implant=None, model=None, resize=True, scale_features=True, **kwargs):
         self.verbose = verbose
         # Default to Argus II if no implant provided
         self.implant = implant
@@ -206,9 +217,20 @@ class AxonMapEstimator(BaseEstimator):
         A patient specific implant. Will default to ArgusII with no rotation.
     model : p2p.models.AxonMapModel, optional
         A patient specific model.
-    relative_weight : float, optional
-        Weight of size vs eccentricity for MSE loss function. Since size is much larger,
-        (especially when squared) this value defaults to be very small (10e-6)
+    mse_params: list of skimage regionprops params, optional
+        The parameters to use to compute MSE. Each must be a valid parameter of skimage.measure.regionprops
+        Defaults to ellipse major and minor axis.
+        Note that due to scale differences between parameters, each will be transformed to have mean 0 and variance 1
+    feature_importance : list of floats, optional
+        Relative MSE weight for each loss param. 
+        Note that this applies AFTER scaling mean to 0 and variance to 1 (if scale_features is true). 
+        Thus, a value of 2 means the corresponding feature is twice as important as any feature with value 1
+        Defaults to equal weighting
+    scale_features : bool, optional
+        Whether or not to scale features to have 0 mean and 1 variance. 
+        Defaults to true
+        Warning: If this is false, then feature_importances should be updated to reflect the difference in scale
+        between different features
     """
     def __init__(self, verbose=True, feature_importance=None, implant=None, model=None, resize=True, mse_params=None, scale_features=True, **kwargs):
         self.verbose = verbose
