@@ -4,7 +4,7 @@ import math
 import time
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import LinearRegression
-from skimage.measure import label, regionprops
+from skimage.measure import label, regionprops, moments_central
 from skimage.transform import resize
 from sklearn.preprocessing import StandardScaler
 
@@ -179,7 +179,7 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         score = np.sum(score_contrib)
 
         if self.verbose:
-            mses = [str(self._mse_params[i]) + ": " + str(round(score_contrib[i], 3)) for i in range(len(score_contrib))]
+            mses = [str(self._mse_params[i]) + ": " + str(round(score_contrib[i], 1)) for i in range(len(score_contrib))]
             print(('score=%.3f, rho=%.1f, lambda=%.1f, a5=%.3f, a6=%.3f, mses: ' + str(mses)) % 
                                             (score,
                                              self.model.rho,
@@ -194,11 +194,16 @@ class BiphasicAxonMapEstimator(BaseEstimator):
     def compute_moments(self, y, fit_scaler=True, shape=None, threshold=None):
         if shape is not None:
             y = [resize(img, shape, anti_aliasing=True) for img in y]
-        props = [self.get_props(p, threshold=threshold) for p in y]
-        
+
+        if self.mse_params != ['moments_central']:
+            # Only need to compute props if we have more than moments_central
+            props = [self.get_props(p, threshold=threshold) for p in y]
+        else: 
+            # Anything but None
+            props = [0.0 for i in y]
         moments = [] # y feats
         new_mse_params = [] # new parameters after expanding moments
-        for idx_prop, prop in enumerate(props):
+        for idx_prop, (prop, y_img) in enumerate(zip(props, y)):
             prop_moments = []
             if prop is not None:
                 for idx_param, param in enumerate(self.mse_params):
@@ -207,7 +212,14 @@ class BiphasicAxonMapEstimator(BaseEstimator):
                         if idx_prop == 0:
                             new_mse_params.append(param)
                     else:
-                        central_moments = prop["moments_central"]
+                        # Compute moments on whole image not prop
+                        if threshold == "compute":
+                            threshold = (y_img.max() - y_img.min()) * 0.1 + y_img.min()
+                            central_moments = moments_central(y_img > threshold)
+                        elif threshold is not None:
+                            central_moments = moments_central(y_img > threshold)
+                        else:
+                            central_moments = moments_central(y_img)
                         for r in range(3):
                                 for c in range(3):
                                     if r + c != 1:
@@ -352,13 +364,11 @@ class AxonMapEstimator(BaseEstimator):
         score = np.sum(score_contrib)
 
         if self.verbose:
-            mses = [str(self._mse_params[i]) + ": " + str(round(score_contrib[i], 3)) for i in range(len(score_contrib))]
-            print(('score=%.3f, rho=%.1f, lambda=%.1f, a5=%.3f, a6=%.3f, mses: ' + str(mses)) % 
+            mses = [str(self._mse_params[i]) + ": " + str(round(score_contrib[i], 1)) for i in range(len(score_contrib))]
+            print(('score=%.3f, rho=%.1f, lambda=%.1f, mses: ' + str(mses)) % 
                                             (score,
                                              self.model.rho,
-                                             self.model.axlambda,
-                                             self.model.a5,
-                                             self.model.a6))
+                                             self.model.axlambda))
         if not return_mses: 
             return score
         else:
@@ -367,11 +377,16 @@ class AxonMapEstimator(BaseEstimator):
     def compute_moments(self, y, fit_scaler=True, shape=None, threshold=None):
         if shape is not None:
             y = [resize(img, shape, anti_aliasing=True) for img in y]
-        props = [self.get_props(p, threshold=threshold) for p in y]
-        
+
+        if self.mse_params != ['moments_central']:
+            # Only need to compute props if we have more than moments_central
+            props = [self.get_props(p, threshold=threshold) for p in y]
+        else: 
+            # Anything but None
+            props = [0.0 for i in y]
         moments = [] # y feats
         new_mse_params = [] # new parameters after expanding moments
-        for idx_prop, prop in enumerate(props):
+        for idx_prop, (prop, y_img) in enumerate(zip(props, y)):
             prop_moments = []
             if prop is not None:
                 for idx_param, param in enumerate(self.mse_params):
@@ -380,7 +395,14 @@ class AxonMapEstimator(BaseEstimator):
                         if idx_prop == 0:
                             new_mse_params.append(param)
                     else:
-                        central_moments = prop["moments_central"]
+                        # Compute moments on whole image not prop
+                        if threshold == "compute":
+                            threshold = (y_img.max() - y_img.min()) * 0.1 + y_img.min()
+                            central_moments = moments_central(y_img > threshold)
+                        elif threshold is not None:
+                            central_moments = moments_central(y_img > threshold)
+                        else:
+                            central_moments = moments_central(y_img)
                         for r in range(3):
                                 for c in range(3):
                                     if r + c != 1:
