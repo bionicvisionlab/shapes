@@ -352,8 +352,6 @@ class AxonMapEstimator(BaseEstimator):
         else:
             raise ValueError("Please precompute the y features using estimator.compute_moments")
         pred_moments = self.compute_moments(y_pred, fit_scaler=False, shape=self.yshape, threshold="compute")
-        print(self.feature_importance)
-        print(self._mse_params)
         if len(self.feature_importance) != len(self._mse_params):
             print("Warning, got different length feature_importances and mse_params. Did you set one manually?\n"
                 "Defaulting to equal weighting")
