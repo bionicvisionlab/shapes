@@ -333,8 +333,20 @@ class AxonMapEstimator(BaseEstimator):
 
     def precompute_moments(self, y, shape=None):
         if shape is not None:
-            y = [resize(img, shape) for img in y]
-        return np.array([[prop.area, prop.eccentricity] if prop is not None else [0.0, 0.0] for prop in [self.get_props(p, threshold=None) for p in y]])
+            y = [resize(img, shape, anti_aliasing=True) for img in y]
+        props = [self.get_props(p, threshold=None) for p in y]
+        moments = np.array([[prop[param] for param in self.mse_params] if prop is not None else [0.0 for param in self.mse_params] for prop in props])
+        self.yshape = y[0].shape
+
+        if self.scale_features: 
+            # fit the scaler
+            self.scaler = StandardScaler(copy=False)
+            moments = self.scaler.fit_transform(moments)
+            means = [str(self.mse_params[i]) + ": " + str(round(self.scaler.mean_[i], 2)) for i in range(len(self.scaler.mean_))]
+            stds = [str(self.mse_params[i]) + ": " + str(round(self.scaler.scale_[i], 2)) for i in range(len(self.scaler.scale_))]
+            if self.verbose:
+                print("Removing means ({}) and scaling standard deviations ({}) to be 1".format(means, stds))
+        return moments
 
 
     
