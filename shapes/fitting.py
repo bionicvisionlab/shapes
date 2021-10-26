@@ -172,7 +172,9 @@ class BiphasicAxonMapEstimator(BaseEstimator):
             print("Warning, got different length feature_importances and mse_params. Did you set one manually?\n"
                 "Defaulting to equal weighting")
             self.feature_importance = np.ones(len(self._mse_params))
-        
+        if pred_moments.shape != y_moments.shape:
+            raise ValueError("Mismatch in predicted and actual feature shape ({} and {}). Did you forget to use compute_moments?".format(
+                pred_moments.shape, y_moments.shape))
         # LOSS
         # weighted MSE
         score_contrib = np.mean((pred_moments - y_moments)**2 , axis=0) * self.feature_importance
@@ -356,7 +358,9 @@ class AxonMapEstimator(BaseEstimator):
             print("Warning, got different length feature_importances and mse_params. Did you set one manually?\n"
                 "Defaulting to equal weighting")
             self.feature_importance = np.ones(len(self._mse_params))
-        
+        if pred_moments.shape != y_moments.shape:
+            raise ValueError("Mismatch in predicted and actual feature shape ({} and {}). Did you forget to use compute_moments?".format(
+                pred_moments.shape, y_moments.shape))
         # LOSS
         # weighted MSE
         score_contrib = np.mean((pred_moments - y_moments)**2 , axis=0) * self.feature_importance
