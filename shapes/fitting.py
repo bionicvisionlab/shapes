@@ -179,13 +179,14 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         score = np.sum(score_contrib)
 
         if self.verbose:
-            mses = [str(self._mse_params[i]) + ": " + str(round(score_contrib[i], 1)) for i in range(len(score_contrib))]
-            print(('score=%.3f, rho=%.1f, lambda=%.1f, a5=%.3f, a6=%.3f, mses: ' + str(mses)) % 
+            mses = [str(self._mse_params[i]) + ":" + str(round(score_contrib[i], 1)) for i in range(len(score_contrib))]
+            print(('score:%.3f, rho:%.1f, lambda:%.1f, a5:%.3f, a6:%.3f, empty:%d, mses: ' + str(mses)) % 
                                             (score,
                                              self.model.rho,
                                              self.model.axlambda,
                                              self.model.a5,
-                                             self.model.a6))
+                                             self.model.a6,
+                                             self.null_props))
         if not return_mses: 
             return score
         else:
@@ -195,12 +196,8 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         if shape is not None:
             y = [resize(img, shape, anti_aliasing=True) for img in y]
 
-        if self.mse_params != ['moments_central']:
-            # Only need to compute props if we have more than moments_central
-            props = [self.get_props(p, threshold=threshold) for p in y]
-        else: 
-            # Anything but None
-            props = [0.0 for i in y]
+        props = [self.get_props(p, threshold=threshold) for p in y]
+        self.null_props = len([i for i in props if i is None])
         moments = [] # y feats
         new_mse_params = [] # new parameters after expanding moments
         for idx_prop, (prop, y_img) in enumerate(zip(props, y)):
@@ -364,11 +361,12 @@ class AxonMapEstimator(BaseEstimator):
         score = np.sum(score_contrib)
 
         if self.verbose:
-            mses = [str(self._mse_params[i]) + ": " + str(round(score_contrib[i], 1)) for i in range(len(score_contrib))]
-            print(('score=%.3f, rho=%.1f, lambda=%.1f, mses: ' + str(mses)) % 
+            mses = [str(self._mse_params[i]) + ":" + str(round(score_contrib[i], 1)) for i in range(len(score_contrib))]
+            print(('score:%.3f, rho:%.1f, lambda:%.1f, empty:%d, mses:' + str(mses)) % 
                                             (score,
                                              self.model.rho,
-                                             self.model.axlambda))
+                                             self.model.axlambda,
+                                             self.null_props))
         if not return_mses: 
             return score
         else:
@@ -378,12 +376,8 @@ class AxonMapEstimator(BaseEstimator):
         if shape is not None:
             y = [resize(img, shape, anti_aliasing=True) for img in y]
 
-        if self.mse_params != ['moments_central']:
-            # Only need to compute props if we have more than moments_central
-            props = [self.get_props(p, threshold=threshold) for p in y]
-        else: 
-            # Anything but None
-            props = [0.0 for i in y]
+        props = [self.get_props(p, threshold=threshold) for p in y]
+        self.null_props = len([i for i in props if i is None])
         moments = [] # y feats
         new_mse_params = [] # new parameters after expanding moments
         for idx_prop, (prop, y_img) in enumerate(zip(props, y)):
@@ -435,7 +429,6 @@ class AxonMapEstimator(BaseEstimator):
             # just transform, dont fit
             moments = self.scaler.transform(moments)
         return moments
-
 
     
 
