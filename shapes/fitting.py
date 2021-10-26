@@ -51,15 +51,21 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         if self.model is None:
             self.model = BiphasicAxonMapModel(xystep=0.5)
         self.model.build()
+
         self.mse_params = mse_params
         if self.mse_params is None:
-            self.mse_params = ['major_axis_length', 'minor_axis_length']
+            self.mse_params = ["central_moments"]
+
+        num_feats = len(self.mse_params)
+        if "moments_central" in self.mse_params:
+            num_feats += 6
         if feature_importance is not None:
-            if len(feature_importance) != len(self.mse_params):
-                raise ValueError("Feature_importance must be same length as mse_params: %d" % len(mse_params))
+            if len(feature_importance) != num_feats:
+                raise ValueError("Feature_importance must be same length as mse_params: %d" % num_feats)
             self.feature_importance = feature_importance
         else:
-            self.feature_importance = np.ones(len(self.mse_params))
+            self.feature_importance = np.ones(num_feats)
+
         # Create all parameters here, but don't neccesarily need to use them all
         self.rho = self.model.rho
         self.axlambda = self.model.axlambda
@@ -87,10 +93,12 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         }
         return params
 
-    def get_props(self, drawing, threshold=1):
+    def get_props(self, drawing, threshold="compute"):
         """
         Returns the regionprops region with the largest area
         """
+        if threshold == 'compute':
+            threshold = (drawing.max() - drawing.min()) * 0.1 + drawing.min()
         if threshold is not None:
             props = regionprops(label(drawing > threshold))
         else:
@@ -151,59 +159,86 @@ class BiphasicAxonMapEstimator(BaseEstimator):
             y_pred.append(percept.data[:, :, 0])
         return pd.Series(y_pred, index=X.index)
 
-    def score(self, X, y):
+    def score(self, X, y, return_mses=False):
         y_pred = self.predict(X)
         # If yshape has a value, then moments have been precomputed
         if self.yshape is not None:
             y_moments = y
         else:
-            props = [self.get_props(p, threshold=None) for p in y]
-            y_moments = np.array([[prop[param] for param in self.mse_params] if prop is not None else [0.0 for param in self.mse_params] for prop in props])
-            self.yshape = y[0].shape
-            if self.scale_features:
-                self.scaler = StandardScaler(copy=False)
-                y_moments = self.scaler.fit_transform(y_moments)
+            raise ValueError("Please precompute the y features using estimator.compute_moments")
+        pred_moments = self.compute_moments(y_pred, fit_scaler=False, shape=self.yshape, threshold="compute")
 
-        if self.resize:
-            for i in y_pred.index:
-                y_pred[i] = resize(y_pred[i], self.yshape)
-
+        if len(self.feature_importance) != len(self._mse_params):
+            print("Warning, got different length feature_importances and mse_params. Did you set one manually?\n"
+                "Defaulting to equal weighting")
+            self.feature_importance = np.ones(len(self._mse_params))
+        
         # LOSS
         # weighted MSE
-        pred_props = [self.get_props(p) for p in y_pred]
-        pred_moments = np.array([[prop[param] for param in self.mse_params] if prop is not None else [0.0 for param in self.mse_params] for prop in pred_props])
-        pred_moments = self.scaler.transform(pred_moments)
-        
         score_contrib = np.mean((pred_moments - y_moments)**2 , axis=0) * self.feature_importance
         score = np.sum(score_contrib)
 
         if self.verbose:
-            mses = [str(self.mse_params[i]) + ": " + str(round(score_contrib[i], 3)) for i in range(len(score_contrib))]
-            print(('rho=%f, axlambda=%f, a5=%f, a6=%f, null_props=%.1f, score=%f, mses: ' + str(mses)) % 
-                                            (self.model.rho,
+            mses = [str(self._mse_params[i]) + ": " + str(round(score_contrib[i], 3)) for i in range(len(score_contrib))]
+            print(('score=%.3f, rho=%.1f, lambda=%.1f, a5=%.3f, a6=%.3f, mses: ' + str(mses)) % 
+                                            (score,
+                                             self.model.rho,
                                              self.model.axlambda,
                                              self.model.a5,
-                                             self.model.a6,
-                                             np.sum(pred_moments==0) / len(score_contrib),
-                                             score))
+                                             self.model.a6))
+        if not return_mses: 
+            return score
+        else:
+            return score, score_contrib
 
-        return score
-
-    def precompute_moments(self, y, shape=None):
+    def compute_moments(self, y, fit_scaler=True, shape=None, threshold=None):
         if shape is not None:
             y = [resize(img, shape, anti_aliasing=True) for img in y]
-        props = [self.get_props(p, threshold=None) for p in y]
-        moments = np.array([[prop[param] for param in self.mse_params] if prop is not None else [0.0 for param in self.mse_params] for prop in props])
-        self.yshape = y[0].shape
+        props = [self.get_props(p, threshold=threshold) for p in y]
+        
+        moments = [] # y feats
+        new_mse_params = [] # new parameters after expanding moments
+        for idx_prop, prop in enumerate(props):
+            prop_moments = []
+            if prop is not None:
+                for idx_param, param in enumerate(self.mse_params):
+                    if param != 'moments_central':
+                        prop_moments.append(prop[param])
+                        if idx_prop == 0:
+                            new_mse_params.append(param)
+                    else:
+                        central_moments = prop["moments_central"]
+                        for r in range(3):
+                                for c in range(3):
+                                    if r + c != 1:
+                                        prop_moments.append(central_moments[r,c])
+                                        if idx_prop == 0:
+                                            new_mse_params.append("M" + str(r) + str(c))
+                prop_moments = np.array(prop_moments)
+            else:
+                # all 0's, but how many depends on if central_moments is a param
+                if "moments_central" not in self.mse_params:
+                    prop_moments = np.zeros(len(self.mse_params))
+                else:
+                    prop_moments = np.zeros((len(self.mse_params) + 6))
+            moments.append(prop_moments)
 
-        if self.scale_features: 
+        moments = np.array(moments)
+        self._mse_params = new_mse_params
+        if shape is None:
+            self.yshape = y[0].shape
+
+        if self.scale_features and fit_scaler: 
             # fit the scaler
             self.scaler = StandardScaler(copy=False)
             moments = self.scaler.fit_transform(moments)
-            means = [str(self.mse_params[i]) + ": " + str(round(self.scaler.mean_[i], 2)) for i in range(len(self.scaler.mean_))]
-            stds = [str(self.mse_params[i]) + ": " + str(round(self.scaler.scale_[i], 2)) for i in range(len(self.scaler.scale_))]
+            means = [str(self._mse_params[i]) + ": " + str(round(self.scaler.mean_[i], 2)) for i in range(len(self.scaler.mean_))]
+            stds = [str(self._mse_params[i]) + ": " + str(round(self.scaler.scale_[i], 2)) for i in range(len(self.scaler.scale_))]
             if self.verbose:
-                print("Removing means ({}) and scaling standard deviations ({}) to be 1".format(means, stds))
+                print("Removing means ({}) \nScaling standard deviations ({}) to be 1".format(means, stds))
+        elif self.scale_features:
+            # just transform, dont fit
+            moments = self.scaler.transform(moments)
         return moments
         
         
@@ -268,10 +303,12 @@ class AxonMapEstimator(BaseEstimator):
         }
         return params
 
-    def get_props(self, drawing, threshold=1):
+    def get_props(self, drawing, threshold="compute"):
         """
         Returns the regionprops region with the largest area
         """
+        if threshold == 'compute':
+            threshold = (drawing.max() - drawing.min()) * 0.1 + drawing.min()
         if threshold is not None:
             props = regionprops(label(drawing > threshold))
         else:
@@ -295,57 +332,86 @@ class AxonMapEstimator(BaseEstimator):
             y_pred.append(percept.get_brightest_frame())
         return pd.Series(y_pred, index=X.index)
 
-    def score(self, X, y):
+    def score(self, X, y, return_mses=False):
         y_pred = self.predict(X)
         # If yshape has a value, then moments have been precomputed
         if self.yshape is not None:
             y_moments = y
         else:
-            props = [self.get_props(p, threshold=None) for p in y]
-            y_moments = np.array([[prop[param] for param in self.mse_params] if prop is not None else [0.0 for param in self.mse_params] for prop in props])
-            self.yshape = y[0].shape
-            if self.scale_features:
-                self.scaler = StandardScaler(copy=False)
-                y_moments = self.scaler.fit_transform(y_moments)
+            raise ValueError("Please precompute the y features using estimator.compute_moments")
+        pred_moments = self.compute_moments(y_pred, fit_scaler=False, shape=self.yshape, threshold="compute")
 
-        if self.resize:
-            for i in y_pred.index:
-                y_pred[i] = resize(y_pred[i], self.yshape)
-
+        if len(self.feature_importance) != len(self._mse_params):
+            print("Warning, got different length feature_importances and mse_params. Did you set one manually?\n"
+                "Defaulting to equal weighting")
+            self.feature_importance = np.ones(len(self._mse_params))
+        
         # LOSS
         # weighted MSE
-        pred_props = [self.get_props(p) for p in y_pred]
-        pred_moments = np.array([[prop[param] for param in self.mse_params] if prop is not None else [0.0 for param in self.mse_params] for prop in pred_props])
-        pred_moments = self.scaler.transform(pred_moments)
-        
         score_contrib = np.mean((pred_moments - y_moments)**2 , axis=0) * self.feature_importance
         score = np.sum(score_contrib)
 
         if self.verbose:
-            mses = [str(self.mse_params[i]) + ": " + str(round(score_contrib[i], 3)) for i in range(len(score_contrib))]
-            print(('rho=%f, axlambda=%f, null_props=%.1f, score=%f, mses: ' + str(mses)) % 
-                                            (self.model.rho,
+            mses = [str(self._mse_params[i]) + ": " + str(round(score_contrib[i], 3)) for i in range(len(score_contrib))]
+            print(('score=%.3f, rho=%.1f, lambda=%.1f, a5=%.3f, a6=%.3f, mses: ' + str(mses)) % 
+                                            (score,
+                                             self.model.rho,
                                              self.model.axlambda,
-                                             np.sum(pred_moments==0) / len(score_contrib),
-                                             score))
+                                             self.model.a5,
+                                             self.model.a6))
+        if not return_mses: 
+            return score
+        else:
+            return score, score_contrib
 
-        return score
-
-    def precompute_moments(self, y, shape=None):
+    def compute_moments(self, y, fit_scaler=True, shape=None, threshold=None):
         if shape is not None:
             y = [resize(img, shape, anti_aliasing=True) for img in y]
-        props = [self.get_props(p, threshold=None) for p in y]
-        moments = np.array([[prop[param] for param in self.mse_params] if prop is not None else [0.0 for param in self.mse_params] for prop in props])
-        self.yshape = y[0].shape
+        props = [self.get_props(p, threshold=threshold) for p in y]
+        
+        moments = [] # y feats
+        new_mse_params = [] # new parameters after expanding moments
+        for idx_prop, prop in enumerate(props):
+            prop_moments = []
+            if prop is not None:
+                for idx_param, param in enumerate(self.mse_params):
+                    if param != 'moments_central':
+                        prop_moments.append(prop[param])
+                        if idx_prop == 0:
+                            new_mse_params.append(param)
+                    else:
+                        central_moments = prop["moments_central"]
+                        for r in range(3):
+                                for c in range(3):
+                                    if r + c != 1:
+                                        prop_moments.append(central_moments[r,c])
+                                        if idx_prop == 0:
+                                            new_mse_params.append("M" + str(r) + str(c))
+                prop_moments = np.array(prop_moments)
+            else:
+                # all 0's, but how many depends on if central_moments is a param
+                if "moments_central" not in self.mse_params:
+                    prop_moments = np.zeros(len(self.mse_params))
+                else:
+                    prop_moments = np.zeros((len(self.mse_params) + 6))
+            moments.append(prop_moments)
 
-        if self.scale_features: 
+        moments = np.array(moments)
+        self._mse_params = new_mse_params
+        if shape is None:
+            self.yshape = y[0].shape
+
+        if self.scale_features and fit_scaler: 
             # fit the scaler
             self.scaler = StandardScaler(copy=False)
             moments = self.scaler.fit_transform(moments)
-            means = [str(self.mse_params[i]) + ": " + str(round(self.scaler.mean_[i], 2)) for i in range(len(self.scaler.mean_))]
-            stds = [str(self.mse_params[i]) + ": " + str(round(self.scaler.scale_[i], 2)) for i in range(len(self.scaler.scale_))]
+            means = [str(self._mse_params[i]) + ": " + str(round(self.scaler.mean_[i], 2)) for i in range(len(self.scaler.mean_))]
+            stds = [str(self._mse_params[i]) + ": " + str(round(self.scaler.scale_[i], 2)) for i in range(len(self.scaler.scale_))]
             if self.verbose:
-                print("Removing means ({}) and scaling standard deviations ({}) to be 1".format(means, stds))
+                print("Removing means ({}) \nScaling standard deviations ({}) to be 1".format(means, stds))
+        elif self.scale_features:
+            # just transform, dont fit
+            moments = self.scaler.transform(moments)
         return moments
 
 
