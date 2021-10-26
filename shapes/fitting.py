@@ -116,7 +116,7 @@ class BiphasicAxonMapEstimator(BaseEstimator):
     
     def fit_size_model(self, x, y):
         amps = np.array(x).reshape(-1, 1)
-        sizes = [self.get_props(image, threshold=None).area for image in y]
+        sizes = [np.sum(image) for image in y]
         if len(np.unique(amps)) < 2:
             print("Warning: Not enough uniqiue amps to fit effects model, using defaults")
             return
@@ -213,8 +213,8 @@ class BiphasicAxonMapEstimator(BaseEstimator):
                     else:
                         # Compute moments on whole image not prop
                         if threshold == "compute":
-                            threshold = (y_img.max() - y_img.min()) * 0.1 + y_img.min()
-                            central_moments = moments_central(y_img > threshold)
+                            thresh = (y_img.max() - y_img.min()) * 0.1 + y_img.min()
+                            central_moments = moments_central(y_img > thresh)
                         elif threshold is not None:
                             central_moments = moments_central(y_img > threshold)
                         else:
@@ -397,8 +397,8 @@ class AxonMapEstimator(BaseEstimator):
                     else:
                         # Compute moments on whole image not prop
                         if threshold == "compute":
-                            threshold = (y_img.max() - y_img.min()) * 0.1 + y_img.min()
-                            central_moments = moments_central(y_img > threshold)
+                            thresh = (y_img.max() - y_img.min()) * 0.1 + y_img.min()
+                            central_moments = moments_central(y_img > thresh)
                         elif threshold is not None:
                             central_moments = moments_central(y_img > threshold)
                         else:
@@ -417,24 +417,5 @@ class AxonMapEstimator(BaseEstimator):
                 else:
                     prop_moments = np.zeros((len(self.mse_params) + 6))
             moments.append(prop_moments)
-
-        moments = np.array(moments)
-        self._mse_params = new_mse_params
-        if shape is None:
-            self.yshape = y[0].shape
-
-        if self.scale_features and fit_scaler: 
-            # fit the scaler
-            self.scaler = StandardScaler(copy=False)
-            moments = self.scaler.fit_transform(moments)
-            means = [str(self._mse_params[i]) + ": " + str(round(self.scaler.mean_[i], 2)) for i in range(len(self.scaler.mean_))]
-            stds = [str(self._mse_params[i]) + ": " + str(round(self.scaler.scale_[i], 2)) for i in range(len(self.scaler.scale_))]
-            if self.verbose:
-                print("Removing means ({}) \nScaling standard deviations ({}) to be 1".format(means, stds))
-        elif self.scale_features:
-            # just transform, dont fit
-            moments = self.scaler.transform(moments)
-        return moments
-
     
 
