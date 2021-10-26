@@ -288,13 +288,16 @@ class AxonMapEstimator(BaseEstimator):
         self.model.build()
         self.mse_params = mse_params
         if self.mse_params is None:
-            self.mse_params = ['major_axis_length', 'minor_axis_length']
+            self.mse_params = ["central_moments"]
+        num_feats = len(self.mse_params)
+        if "moments_central" in self.mse_params:
+            num_feats += 6
         if feature_importance is not None:
-            if len(feature_importance) != len(self.mse_params):
-                raise ValueError("Feature_importance must be same length as mse_params: %d" % len(mse_params))
+            if len(feature_importance) != num_feats:
+                raise ValueError("Feature_importance must be same length as mse_params: %d" % num_feats)
             self.feature_importance = feature_importance
         else:
-            self.feature_importance = np.ones(len(self.mse_params))
+            self.feature_importance = np.ones(num_feats)
         # Create all parameters here, but don't neccesarily need to use them all
         self.rho = self.model.rho
         self.axlambda = self.model.axlambda
@@ -349,7 +352,8 @@ class AxonMapEstimator(BaseEstimator):
         else:
             raise ValueError("Please precompute the y features using estimator.compute_moments")
         pred_moments = self.compute_moments(y_pred, fit_scaler=False, shape=self.yshape, threshold="compute")
-
+        print(self.feature_importance)
+        print(self._mse_params)
         if len(self.feature_importance) != len(self._mse_params):
             print("Warning, got different length feature_importances and mse_params. Did you set one manually?\n"
                 "Defaulting to equal weighting")
