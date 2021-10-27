@@ -417,5 +417,23 @@ class AxonMapEstimator(BaseEstimator):
                 else:
                     prop_moments = np.zeros((len(self.mse_params) + 6))
             moments.append(prop_moments)
+
+        moments = np.array(moments)
+        self._mse_params = new_mse_params
+        if shape is None:
+            self.yshape = y[0].shape
+
+        if self.scale_features and fit_scaler: 
+            # fit the scaler
+            self.scaler = StandardScaler(copy=False)
+            moments = self.scaler.fit_transform(moments)
+            means = [str(self._mse_params[i]) + ": " + str(round(self.scaler.mean_[i], 2)) for i in range(len(self.scaler.mean_))]
+            stds = [str(self._mse_params[i]) + ": " + str(round(self.scaler.scale_[i], 2)) for i in range(len(self.scaler.scale_))]
+            if self.verbose:
+                print("Removing means ({}) \nScaling standard deviations ({}) to be 1".format(means, stds))
+        elif self.scale_features:
+            # just transform, dont fit
+            moments = self.scaler.transform(moments)
+        return moments
     
 
