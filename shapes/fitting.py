@@ -197,8 +197,10 @@ class BiphasicAxonMapEstimator(BaseEstimator):
     def compute_moments(self, y, fit_scaler=True, shape=None, threshold=None):
         if shape is not None:
             y = [resize(img, shape, anti_aliasing=True) for img in y]
-
-        props = [self.get_props(p, threshold=threshold) for p in y]
+        if self.mse_params == ['moments_central']:
+            props = [0.0 for p in y] # anything but none
+        else:
+            props = [self.get_props(p, threshold=threshold) for p in y]
         self.null_props = len([i for i in props if i is None])
         moments = [] # y feats
         new_mse_params = [] # new parameters after expanding moments
@@ -222,7 +224,10 @@ class BiphasicAxonMapEstimator(BaseEstimator):
                         for r in range(3):
                                 for c in range(3):
                                     if r + c != 1:
-                                        prop_moments.append(central_moments[r,c])
+                                        moment = central_moments[r,c]
+                                        if np.isnan(moment):
+                                            moment = 0
+                                        prop_moments.append(moment)
                                         if idx_prop == 0:
                                             new_mse_params.append("M" + str(r) + str(c))
                 prop_moments = np.array(prop_moments)
@@ -233,7 +238,6 @@ class BiphasicAxonMapEstimator(BaseEstimator):
                 else:
                     prop_moments = np.zeros((len(self.mse_params) + 6))
             moments.append(prop_moments)
-
         moments = np.array(moments)
         self._mse_params = new_mse_params
         if shape is None:
@@ -381,8 +385,10 @@ class AxonMapEstimator(BaseEstimator):
     def compute_moments(self, y, fit_scaler=True, shape=None, threshold=None):
         if shape is not None:
             y = [resize(img, shape, anti_aliasing=True) for img in y]
-
-        props = [self.get_props(p, threshold=threshold) for p in y]
+        if self.mse_params == ['moments_central']:
+            props = [0.0 for p in y] # anything but none
+        else:
+            props = [self.get_props(p, threshold=threshold) for p in y]
         self.null_props = len([i for i in props if i is None])
         moments = [] # y feats
         new_mse_params = [] # new parameters after expanding moments
@@ -406,7 +412,10 @@ class AxonMapEstimator(BaseEstimator):
                         for r in range(3):
                                 for c in range(3):
                                     if r + c != 1:
-                                        prop_moments.append(central_moments[r,c])
+                                        moment = central_moments[r,c]
+                                        if np.isnan(moment):
+                                            moment = 0
+                                        prop_moments.append(moment)
                                         if idx_prop == 0:
                                             new_mse_params.append("M" + str(r) + str(c))
                 prop_moments = np.array(prop_moments)
@@ -417,7 +426,6 @@ class AxonMapEstimator(BaseEstimator):
                 else:
                     prop_moments = np.zeros((len(self.mse_params) + 6))
             moments.append(prop_moments)
-
         moments = np.array(moments)
         self._mse_params = new_mse_params
         if shape is None:
