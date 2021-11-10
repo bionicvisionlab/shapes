@@ -198,8 +198,10 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         y = np.array(y)
         if shape is not None:
             y = [resize(img, shape, anti_aliasing=True) for img in y]
-
-        props = [self.get_props(p, threshold=threshold) for p in y]
+        if self.mse_params == ['moments_central']:
+            props = [0.0 for p in y] # anything but none
+        else:
+            props = [self.get_props(p, threshold=threshold) for p in y]
         self.null_props = len([i for i in props if i is None])
         moments = [] # y feats
         for idx_prop, (prop, y_img) in enumerate(zip(props, y)):
@@ -220,7 +222,10 @@ class BiphasicAxonMapEstimator(BaseEstimator):
                         for r in range(3):
                                 for c in range(3):
                                     if r + c != 1:
-                                        prop_moments.append(central_moments[r,c])
+                                        moment = central_moments[r,c]
+                                        if np.isnan(moment):
+                                            moment = 0
+                                        prop_moments.append(moment)
                 prop_moments = np.array(prop_moments)
             else:
                 # all 0's, but how many depends on if central_moments is a param
@@ -391,8 +396,10 @@ class AxonMapEstimator(BaseEstimator):
         y = np.array(y)
         if shape is not None:
             y = [resize(img, shape, anti_aliasing=True) for img in y]
-
-        props = [self.get_props(p, threshold=threshold) for p in y]
+        if self.mse_params == ['moments_central']:
+            props = [0.0 for p in y] # anything but none
+        else:
+            props = [self.get_props(p, threshold=threshold) for p in y]
         self.null_props = len([i for i in props if i is None])
         moments = [] # y feats
         for idx_prop, (prop, y_img) in enumerate(zip(props, y)):
@@ -413,7 +420,10 @@ class AxonMapEstimator(BaseEstimator):
                         for r in range(3):
                                 for c in range(3):
                                     if r + c != 1:
-                                        prop_moments.append(central_moments[r,c])
+                                        moment = central_moments[r,c]
+                                        if np.isnan(moment):
+                                            moment = 0
+                                        prop_moments.append(moment)
                 prop_moments = np.array(prop_moments)
             else:
                 # all 0's, but how many depends on if central_moments is a param
