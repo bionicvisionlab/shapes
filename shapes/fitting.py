@@ -49,7 +49,7 @@ class AxonMapEstimator(BaseEstimator):
             self.implant = ArgusII()
         self.model = model
         if self.model is None:
-            self.model = AxonMapModel(xystep=0.5)
+            self.model = self.get_default_mode()
         self.model.build()
         self.mse_params = mse_params
         if self.mse_params is None:
@@ -63,15 +63,17 @@ class AxonMapEstimator(BaseEstimator):
             self.feature_importance = feature_importance
         else:
             self.feature_importance = np.ones(num_feats)
-        
-        self.rho = self.model.rho
-        self.axlambda = self.model.axlambda
+        self.initialize_params()     
         self.resize = resize
         self.scaler = None
         self.yshape = None
         self.scale_features = scale_features
         self.set_params(**kwargs)
 
+    def initialize_params(self):
+        # Initialize model specific params
+        self.rho = self.model.rho
+        self.axlambda = self.model.axlambda
 
     def get_params(self, deep=False):
         params = {
@@ -79,6 +81,9 @@ class AxonMapEstimator(BaseEstimator):
                 ['rho', 'axlambda']
         }
         return params
+    
+    def get_default_model(self):
+        return AxonMapModel(xystep=0.5)
 
     def get_props(self, drawing, threshold="compute"):
         """
@@ -246,7 +251,7 @@ class BiphasicAxonMapEstimator(BaseEstimator):
             self.implant = ArgusII()
         self.model = model
         if self.model is None:
-            self.model = BiphasicAxonMapModel(xystep=0.5)
+            self.model = self.get_default_model()
         self.model.build()
 
         self.mse_params = mse_params
@@ -262,8 +267,17 @@ class BiphasicAxonMapEstimator(BaseEstimator):
             self.feature_importance = feature_importance
         else:
             self.feature_importance = np.ones(num_feats)
+        
+        self.initialize_params()
+        self.resize = resize
+        self.scaler = None
+        self.yshape = None
+        self.scale_features = scale_features
+        self.set_params(**kwargs)
 
-        # Create all parameters here, but don't neccesarily need to use them all
+
+    def initialize_params(self):
+        # Initialize model specific params
         self.rho = self.model.rho
         self.axlambda = self.model.axlambda
         self.a0 = self.model.a0
@@ -276,12 +290,9 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         self.a7 = self.model.a7
         self.a8 = self.model.a8
         self.a9 = self.model.a9
-        self.resize = resize
-        self.scaler = None
-        self.yshape = None
-        self.scale_features = scale_features
-        self.set_params(**kwargs)
 
+    def get_default_model(self):
+        return BiphasicAxonMapModel(xystep=0.5)
 
     def get_params(self, deep=False):
         params = {
