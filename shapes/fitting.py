@@ -195,21 +195,19 @@ class BiphasicAxonMapEstimator(BaseEstimator):
             return score, score_contrib
 
     def compute_moments(self, y, fit_scaler=True, shape=None, threshold=None):
+        y = np.array(y)
         if shape is not None:
             y = [resize(img, shape, anti_aliasing=True) for img in y]
 
         props = [self.get_props(p, threshold=threshold) for p in y]
         self.null_props = len([i for i in props if i is None])
         moments = [] # y feats
-        new_mse_params = [] # new parameters after expanding moments
         for idx_prop, (prop, y_img) in enumerate(zip(props, y)):
             prop_moments = []
             if prop is not None:
                 for idx_param, param in enumerate(self.mse_params):
                     if param != 'moments_central':
                         prop_moments.append(prop[param])
-                        if idx_prop == 0:
-                            new_mse_params.append(param)
                     else:
                         # Compute moments on whole image not prop
                         if threshold == "compute":
@@ -223,8 +221,6 @@ class BiphasicAxonMapEstimator(BaseEstimator):
                                 for c in range(3):
                                     if r + c != 1:
                                         prop_moments.append(central_moments[r,c])
-                                        if idx_prop == 0:
-                                            new_mse_params.append("M" + str(r) + str(c))
                 prop_moments = np.array(prop_moments)
             else:
                 # all 0's, but how many depends on if central_moments is a param
@@ -233,6 +229,19 @@ class BiphasicAxonMapEstimator(BaseEstimator):
                 else:
                     prop_moments = np.zeros((len(self.mse_params) + 6))
             moments.append(prop_moments)
+
+        # update _mse params (used for display)
+        new_mse_params = [] # new parameters after expanding moments
+        for idx_param, param in enumerate(self.mse_params):
+            if param != 'moments_central':
+                    new_mse_params.append(param)
+            else: # expand moments
+                for r in range(3):
+                        for c in range(3):
+                            if r + c != 1:
+                                prop_moments.append(central_moments[r,c])
+                                if idx_prop == 0:
+                                    new_mse_params.append("M" + str(r) + str(c))
 
         moments = np.array(moments)
         self._mse_params = new_mse_params
@@ -379,21 +388,19 @@ class AxonMapEstimator(BaseEstimator):
             return score, score_contrib
 
     def compute_moments(self, y, fit_scaler=True, shape=None, threshold=None):
+        y = np.array(y)
         if shape is not None:
             y = [resize(img, shape, anti_aliasing=True) for img in y]
 
         props = [self.get_props(p, threshold=threshold) for p in y]
         self.null_props = len([i for i in props if i is None])
         moments = [] # y feats
-        new_mse_params = [] # new parameters after expanding moments
         for idx_prop, (prop, y_img) in enumerate(zip(props, y)):
             prop_moments = []
             if prop is not None:
                 for idx_param, param in enumerate(self.mse_params):
                     if param != 'moments_central':
                         prop_moments.append(prop[param])
-                        if idx_prop == 0:
-                            new_mse_params.append(param)
                     else:
                         # Compute moments on whole image not prop
                         if threshold == "compute":
@@ -407,8 +414,6 @@ class AxonMapEstimator(BaseEstimator):
                                 for c in range(3):
                                     if r + c != 1:
                                         prop_moments.append(central_moments[r,c])
-                                        if idx_prop == 0:
-                                            new_mse_params.append("M" + str(r) + str(c))
                 prop_moments = np.array(prop_moments)
             else:
                 # all 0's, but how many depends on if central_moments is a param
@@ -417,6 +422,19 @@ class AxonMapEstimator(BaseEstimator):
                 else:
                     prop_moments = np.zeros((len(self.mse_params) + 6))
             moments.append(prop_moments)
+
+        # update _mse params (used for display)
+        new_mse_params = [] # new parameters after expanding moments
+        for idx_param, param in enumerate(self.mse_params):
+            if param != 'moments_central':
+                    new_mse_params.append(param)
+            else: # expand moments
+                for r in range(3):
+                        for c in range(3):
+                            if r + c != 1:
+                                prop_moments.append(central_moments[r,c])
+                                if idx_prop == 0:
+                                    new_mse_params.append("M" + str(r) + str(c))
 
         moments = np.array(moments)
         self._mse_params = new_mse_params
@@ -435,5 +453,3 @@ class AxonMapEstimator(BaseEstimator):
             # just transform, dont fit
             moments = self.scaler.transform(moments)
         return moments
-    
-
