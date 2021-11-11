@@ -7,6 +7,7 @@ from sklearn.linear_model import LinearRegression
 from skimage.measure import label, regionprops, moments_central
 from skimage.transform import resize
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import r2_score
 
 from pulse2percept.models import BiphasicAxonMapModel, AxonMapModel
 from pulse2percept.model_selection import ParticleSwarmOptimizer
@@ -40,8 +41,22 @@ class AxonMapEstimator(BaseEstimator):
         Defaults to true
         Warning: If this is false, then feature_importances should be updated to reflect the difference in scale
         between different features
+    threshold : float, optional
+        Threshold to use on predicted images to get regionprops
+        Defaults to 'compute', which computes the threshold for each drawing as (drawing.max() - drawing.min()) * 0.1 + drawing.min()
+    loss_fn : str or callable, optional
+        Loss function to use. 
+        Options:
+        --------
+        mse : Mean squared error, default
+        r2 : 1 - R^2 across all moments/params 
+        callable : function with signature f(predicted, target) -> array of floats with shape (n_params)
+    resize : bool, optional
+        Whether or not to resize the predicted image to be the same size as the targets
+    
     """
-    def __init__(self, verbose=True, feature_importance=None, implant=None, model=None, resize=True, mse_params=None, scale_features=True, **kwargs):
+    def __init__(self, mse_params=None, feature_importance=None, implant=None, model=None, loss_fn='mse',
+                 scale_features=True, threshold='compute', resize=True, verbose=True, **kwargs):
         self.verbose = verbose
         # Default to Argus II if no implant provided
         self.implant = implant
@@ -49,7 +64,7 @@ class AxonMapEstimator(BaseEstimator):
             self.implant = ArgusII()
         self.model = model
         if self.model is None:
-            self.model = self.get_default_mode()
+            self.model = AxonMapModel(xystep=0.5)
         self.model.build()
         self.mse_params = mse_params
         if self.mse_params is None:
@@ -63,17 +78,24 @@ class AxonMapEstimator(BaseEstimator):
             self.feature_importance = feature_importance
         else:
             self.feature_importance = np.ones(num_feats)
-        self.initialize_params()     
-        self.resize = resize
+        
+        if loss_fn == 'mse':
+            self.loss_fn = self.mse
+        elif loss_fn == 'r2':
+            self.loss_fn = self.r2
+        elif callable(loss_fn):
+            self.loss_fn = loss_fn
+        else:
+            raise ValueError("Could not interpret loss fn")
+        self.rho = self.model.rho
+        self.axlambda = self.model.axlambda
         self.scaler = None
         self.yshape = None
         self.scale_features = scale_features
-        self.set_params(**kwargs)
+        self.threshold = threshold
+        self.resize = resize
 
-    def initialize_params(self):
-        # Initialize model specific params
-        self.rho = self.model.rho
-        self.axlambda = self.model.axlambda
+        self.set_params(**kwargs)
 
     def get_params(self, deep=False):
         params = {
@@ -81,9 +103,6 @@ class AxonMapEstimator(BaseEstimator):
                 ['rho', 'axlambda']
         }
         return params
-    
-    def get_default_model(self):
-        return AxonMapModel(xystep=0.5)
 
     def get_props(self, drawing, threshold="compute"):
         """
@@ -114,6 +133,19 @@ class AxonMapEstimator(BaseEstimator):
             y_pred.append(percept.get_brightest_frame())
         return pd.Series(y_pred, index=X.index)
 
+    def print_score(self, mses, score):
+        print(('score:%.3f, rho:%.1f, lambda:%.1f, empty:%d, mses:' + str(mses)) % 
+                                            (score,
+                                             self.model.rho,
+                                             self.model.axlambda,
+                                             self.null_props))
+    # Return mse for each, will be summed later
+    def mse(self, predicted, target):
+        return np.mean((predicted - target)**2 , axis=0)
+
+    def r2(self, predicted, target):
+        return 1 - r2_score(target, predicted, multioutput='raw_values')
+
     def score(self, X, y, return_mses=False):
         y_pred = self.predict(X)
         # If yshape has a value, then moments have been precomputed
@@ -121,7 +153,7 @@ class AxonMapEstimator(BaseEstimator):
             y_moments = y
         else:
             raise ValueError("Please precompute the y features using estimator.compute_moments")
-        pred_moments = self.compute_moments(y_pred, fit_scaler=False, shape=self.yshape, threshold="compute")
+        pred_moments = self.compute_moments(y_pred, fit_scaler=False, shape=self.yshape, threshold=self.threshold)
         if len(self.feature_importance) != len(self._mse_params):
             print("Warning, got different length feature_importances and mse_params. Did you set one manually?\n"
                 "Defaulting to equal weighting")
@@ -130,17 +162,12 @@ class AxonMapEstimator(BaseEstimator):
             raise ValueError("Mismatch in predicted and actual feature shape ({} and {}). Did you forget to use compute_moments?".format(
                 pred_moments.shape, y_moments.shape))
         # LOSS
-        # weighted MSE
-        score_contrib = np.mean((pred_moments - y_moments)**2 , axis=0) * self.feature_importance
+        score_contrib = self.loss_fn(pred_moments, y_moments) * self.feature_importance
         score = np.sum(score_contrib)
 
         if self.verbose:
             mses = [str(self._mse_params[i]) + ":" + str(round(score_contrib[i], 1)) for i in range(len(score_contrib))]
-            print(('score:%.3f, rho:%.1f, lambda:%.1f, empty:%d, mses:' + str(mses)) % 
-                                            (score,
-                                             self.model.rho,
-                                             self.model.axlambda,
-                                             self.null_props))
+            self.print_score(mses, score)
         if not return_mses: 
             return score
         else:
@@ -148,7 +175,7 @@ class AxonMapEstimator(BaseEstimator):
 
     def compute_moments(self, y, fit_scaler=True, shape=None, threshold=None):
         y = np.array(y)
-        if shape is not None:
+        if shape is not None and self.resize:
             y = [resize(img, shape, anti_aliasing=True) for img in y]
         if self.mse_params == ['moments_central']:
             props = [0.0 for p in y] # anything but none
@@ -218,7 +245,7 @@ class AxonMapEstimator(BaseEstimator):
             moments = self.scaler.transform(moments)
         return moments
 
-class BiphasicAxonMapEstimator(BaseEstimator):
+class BiphasicAxonMapEstimator(AxonMapEstimator):
     """
     Estimates parameters for a BiphasicAxonMapModel
     
@@ -243,43 +270,20 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         Warning: If this is false, then feature_importances should be updated to reflect the difference in scale
         between different features
     """
-    def __init__(self, verbose=True, mse_params=None, feature_importance=None, implant=None, model=None, resize=True, scale_features=True, **kwargs):
-        self.verbose = verbose
-        # Default to Argus II if no implant provided
-        self.implant = implant
-        if self.implant is None:
-            self.implant = ArgusII()
-        self.model = model
-        if self.model is None:
-            self.model = self.get_default_model()
-        self.model.build()
-
-        self.mse_params = mse_params
-        if self.mse_params is None:
-            self.mse_params = ["central_moments"]
-
-        num_feats = len(self.mse_params)
-        if "moments_central" in self.mse_params:
-            num_feats += 6
-        if feature_importance is not None:
-            if len(feature_importance) != num_feats:
-                raise ValueError("Feature_importance must be same length as mse_params: %d" % num_feats)
-            self.feature_importance = feature_importance
-        else:
-            self.feature_importance = np.ones(num_feats)
-        
-        self.initialize_params()
-        self.resize = resize
-        self.scaler = None
-        self.yshape = None
-        self.scale_features = scale_features
-        self.set_params(**kwargs)
-
-
-    def initialize_params(self):
-        # Initialize model specific params
-        self.rho = self.model.rho
-        self.axlambda = self.model.axlambda
+    def __init__(self, mse_params=None, feature_importance=None, implant=None, model=None, loss_fn='mse',
+                 scale_features=True, threshold='compute', resize=True, verbose=True, **kwargs):
+        if model is None:
+            model = BiphasicAxonMapModel(xystep=0.5)
+        super(BiphasicAxonMapEstimator, self).__init__(verbose=verbose, 
+                             feature_importance=feature_importance, 
+                             mse_params=mse_params,
+                             implant=implant, 
+                             model=model, 
+                             scale_features=scale_features, 
+                             threshold=threshold,
+                             resize=resize,
+                             loss_fn=loss_fn,
+                             **kwargs)
         self.a0 = self.model.a0
         self.a1 = self.model.a1
         self.a2 = self.model.a2
@@ -291,38 +295,22 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         self.a8 = self.model.a8
         self.a9 = self.model.a9
 
-    def get_default_model(self):
-        return BiphasicAxonMapModel(xystep=0.5)
-
     def get_params(self, deep=False):
         params = {
             attr : getattr(self, attr) for attr in \
                 ['rho', 'axlambda', 'a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9']
         }
         return params
-
-    def get_props(self, drawing, threshold="compute"):
-        """
-        Returns the regionprops region with the largest area
-        """
-        if threshold == 'compute':
-            threshold = (drawing.max() - drawing.min()) * 0.1 + drawing.min()
-        if threshold is not None:
-            props = regionprops(label(drawing > threshold))
-        else:
-            props = regionprops(label(drawing))
-        if len(props) == 0:
-            return None
-        return max(props, key=lambda x : x.area)
-
-    def fit_size_model(self, df):
+    
+    def fit_size_model(self, x, y):
         """
         Estimates size_model parameters (rho scaling) of a BiphasicAxonMapModel, A5 and A6,
         based on drawings and amplitudes. 
+        Parameters:
+        ------------
+        x: array of amplitudes
+        y: target images
         """
-        self.fit_size_model(df['amp1'], df['image'])
-    
-    def fit_size_model(self, x, y):
         amps = np.array(x).reshape(-1, 1)
         sizes = [np.sum(image) for image in y]
         if len(np.unique(amps)) < 2:
@@ -359,119 +347,16 @@ class BiphasicAxonMapEstimator(BaseEstimator):
         self.model.build()
         return self
 
-    def predict(self, X):
-        y_pred = []
-        for row in X.itertuples():
-            self.implant.stim = Stimulus({row.electrode1 : BiphasicPulseTrain(row.freq, row.amp1, row.pdur, stim_dur=math.ceil(3*row.pdur))})
-            percept = self.model.predict_percept(self.implant)
-            y_pred.append(percept.data[:, :, 0])
-        return pd.Series(y_pred, index=X.index)
-
-    def score(self, X, y, return_mses=False):
-        y_pred = self.predict(X)
-        # If yshape has a value, then moments have been precomputed
-        if self.yshape is not None:
-            y_moments = y
-        else:
-            raise ValueError("Please precompute the y features using estimator.compute_moments")
-        pred_moments = self.compute_moments(y_pred, fit_scaler=False, shape=self.yshape, threshold="compute")
-
-        if len(self.feature_importance) != len(self._mse_params):
-            print("Warning, got different length feature_importances and mse_params. Did you set one manually?\n"
-                "Defaulting to equal weighting")
-            self.feature_importance = np.ones(len(self._mse_params))
-        if pred_moments.shape != y_moments.shape:
-            raise ValueError("Mismatch in predicted and actual feature shape ({} and {}). Did you forget to use compute_moments?".format(
-                pred_moments.shape, y_moments.shape))
-        # LOSS
-        # weighted MSE
-        score_contrib = np.mean((pred_moments - y_moments)**2 , axis=0) * self.feature_importance
-        score = np.sum(score_contrib)
-
-        if self.verbose:
-            mses = [str(self._mse_params[i]) + ":" + str(round(score_contrib[i], 1)) for i in range(len(score_contrib))]
-            print(('score:%.3f, rho:%.1f, lambda:%.1f, a5:%.3f, a6:%.3f, empty:%d, mses: ' + str(mses)) % 
+    def print_score(self, mses, score):
+        print(('score:%.3f, rho:%.1f, lambda:%.1f, a5:%.3f, a6:%.3f, empty:%d, mses: ' + str(mses)) % 
                                             (score,
                                              self.model.rho,
                                              self.model.axlambda,
                                              self.model.a5,
                                              self.model.a6,
                                              self.null_props))
-        if not return_mses: 
-            return score
-        else:
-            return score, score_contrib
 
-    def compute_moments(self, y, fit_scaler=True, shape=None, threshold=None):
-        y = np.array(y)
-        if shape is not None:
-            y = [resize(img, shape, anti_aliasing=True) for img in y]
-        if self.mse_params == ['moments_central']:
-            props = [0.0 for p in y] # anything but none
-        else:
-            props = [self.get_props(p, threshold=threshold) for p in y]
-        self.null_props = len([i for i in props if i is None])
-        moments = [] # y feats
-        for idx_prop, (prop, y_img) in enumerate(zip(props, y)):
-            prop_moments = []
-            if prop is not None:
-                for idx_param, param in enumerate(self.mse_params):
-                    if param != 'moments_central':
-                        prop_moments.append(prop[param])
-                    else:
-                        # Compute moments on whole image not prop
-                        if threshold == "compute":
-                            thresh = (y_img.max() - y_img.min()) * 0.1 + y_img.min()
-                            central_moments = moments_central(y_img > thresh)
-                        elif threshold is not None:
-                            central_moments = moments_central(y_img > threshold)
-                        else:
-                            central_moments = moments_central(y_img)
-                        for r in range(3):
-                                for c in range(3):
-                                    if r + c != 1:
-                                        moment = central_moments[r,c]
-                                        if np.isnan(moment):
-                                            moment = 0
-                                        prop_moments.append(moment)
-                prop_moments = np.array(prop_moments)
-            else:
-                # all 0's, but how many depends on if central_moments is a param
-                if "moments_central" not in self.mse_params:
-                    prop_moments = np.zeros(len(self.mse_params))
-                else:
-                    prop_moments = np.zeros((len(self.mse_params) + 6))
-            moments.append(prop_moments)
 
-        # update _mse params (used for display)
-        new_mse_params = [] # new parameters after expanding moments
-        for idx_param, param in enumerate(self.mse_params):
-            if param != 'moments_central':
-                    new_mse_params.append(param)
-            else: # expand moments
-                for r in range(3):
-                        for c in range(3):
-                            if r + c != 1:
-                                prop_moments.append(central_moments[r,c])
-                                if idx_prop == 0:
-                                    new_mse_params.append("M" + str(r) + str(c))
 
-        moments = np.array(moments)
-        self._mse_params = new_mse_params
-        if shape is None:
-            self.yshape = y[0].shape
-
-        if self.scale_features and fit_scaler: 
-            # fit the scaler
-            self.scaler = StandardScaler(copy=False)
-            moments = self.scaler.fit_transform(moments)
-            means = [str(self._mse_params[i]) + ": " + str(round(self.scaler.mean_[i], 2)) for i in range(len(self.scaler.mean_))]
-            stds = [str(self._mse_params[i]) + ": " + str(round(self.scaler.scale_[i], 2)) for i in range(len(self.scaler.scale_))]
-            if self.verbose:
-                print("Removing means ({}) \nScaling standard deviations ({}) to be 1".format(means, stds))
-        elif self.scale_features:
-            # just transform, dont fit
-            moments = self.scaler.transform(moments)
-        return moments
         
         
