@@ -4,3 +4,10 @@
 _build/
 auto_examples/
 gen_api/
+*.h5
+*.pickle
+data/*
+data
+.ipynb_checkpoints
+*.log
+*/.ipynb_checkpoints
