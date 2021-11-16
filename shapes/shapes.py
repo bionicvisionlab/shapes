@@ -80,7 +80,7 @@ subject_params = {
 }
 
 # TODO: Which eye?
-def model_from_params(subject_params, biphasic=True):
+def model_from_params(subject_params, biphasic=True, offset=(0, 0, 0)):
     """ 
     Creates an p2p.implants.Argus implant based on a dictionary of subject
     specific implant parameters.
@@ -91,6 +91,8 @@ def model_from_params(subject_params, biphasic=True):
         in shapes.subject_params
     biphasic: bool, optional
         Use BiphasicAxonMapModel, as opposed to AxonMapModel. Defaults to true
+    offset : tuple (x, y, rot), optional
+        Offset from specified implant location, in (microns, microns, degrees)
     
     Returns:
     -----------
@@ -101,9 +103,9 @@ def model_from_params(subject_params, biphasic=True):
     """
 
     implant_args = {
-        'x' : subject_params['implant_x'],
-        'y' : subject_params['implant_y'],
-        'rot' : subject_params['implant_rot']
+        'x' : subject_params['implant_x'] + offset[0],
+        'y' : subject_params['implant_y'] + offset[1],
+        'rot' : subject_params['implant_rot'] + offset[2]
     }
     model_args = {
         'xrange' : (subject_params['xmin'], subject_params['xmax']),
