@@ -68,7 +68,7 @@ class AxonMapEstimator(BaseEstimator):
         self.model.build()
         self.mse_params = mse_params
         if self.mse_params is None:
-            self.mse_params = ["central_moments"]
+            self.mse_params = ["moments_central"]
         num_feats = len(self.mse_params)
         if "moments_central" in self.mse_params:
             num_feats += 6
