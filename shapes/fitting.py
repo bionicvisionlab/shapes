@@ -134,7 +134,7 @@ class AxonMapEstimator(BaseEstimator):
         return pd.Series(y_pred, index=X.index)
 
     def print_score(self, mses, score):
-        print(('score:%.3f, rho:%.1f, lambda:%.1f, empty:%d, mses:' + str(mses)) % 
+        print(('score:%.3f, rho:%.1f, lambda:%.1f, empty:%d, scores:' + str(mses)) % 
                                             (score,
                                              self.model.rho,
                                              self.model.axlambda,
@@ -223,9 +223,7 @@ class AxonMapEstimator(BaseEstimator):
                 for r in range(3):
                         for c in range(3):
                             if r + c != 1:
-                                prop_moments.append(central_moments[r,c])
-                                if idx_prop == 0:
-                                    new_mse_params.append("M" + str(r) + str(c))
+                                new_mse_params.append("M" + str(r) + str(c))
 
         moments = np.array(moments)
         self._mse_params = new_mse_params
@@ -348,7 +346,7 @@ class BiphasicAxonMapEstimator(AxonMapEstimator):
         return self
 
     def print_score(self, mses, score):
-        print(('score:%.3f, rho:%.1f, lambda:%.1f, a5:%.3f, a6:%.3f, empty:%d, mses: ' + str(mses)) % 
+        print(('score:%.3f, rho:%.1f, lambda:%.1f, a5:%.3f, empty:%d, scores: ' + str(mses)) % 
                                             (score,
                                              self.model.rho,
                                              self.model.axlambda,
