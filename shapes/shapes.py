@@ -79,7 +79,6 @@ subject_params = {
     }
 }
 
-# TODO: Which eye?
 def model_from_params(subject_params, biphasic=True, offset=(0, 0, 0)):
     """ 
     Creates an p2p.implants.Argus implant based on a dictionary of subject
