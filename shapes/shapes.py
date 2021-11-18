@@ -21,9 +21,11 @@ try:
 except ImportError:
     has_h5py = False
 
-# Dictionary of subject parameters
-# This is unlikely to change often so its fine to have coded instead of in data
-# Updated with new fits June 2021
+""" 
+Dictionary of subject parameters
+This is unlikely to change often so its fine to have coded instead of in data
+Updated with new fits June 2021
+"""
 subject_params = {
     'TB': {
         'subject_id': 'S1',

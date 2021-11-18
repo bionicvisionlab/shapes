@@ -103,23 +103,23 @@ def dist_across_along_same(e1x, e1y, e2x, e2y, bundle1, bundle2):
     if e1x < e2x :
         return dist_across_along_same(e2x, e2y, e1x, e1y, bundle2, bundle1)
     
-    # find the closest point on bundle 2 to e1. This should always be closer than e2
+    # find closest segment to e2
+    idx_closest2 = np.argmin((bundle2[:, 0] - e2x) ** 2 +
+                            (bundle2[:, 1] - e2y) ** 2)
+    # cut off axon past e2
+    bundle2 = bundle2[:idx_closest2]
+
+    # find the closest point on bundle 2 to e1
     seg_dists = np.sqrt((bundle2[:, 0] - e1x)**2 + (bundle2[:, 1] - e1y)**2)
     idx_closest1 = np.argmin(seg_dists)
     d_across = seg_dists[idx_closest1]
-    # find closest one to e2
-    idx_closest2 = np.argmin((bundle2[:, 0] - e2x) ** 2 +
-                            (bundle2[:, 1] - e2y) ** 2)
-    # if this fails then the assumption that e1 will always be closer to the axon than to the electrode is false
-    assert idx_closest1 <= idx_closest2
 
     # now find the distance along the axon from that point to e2
-    d_along = np.sum(np.sqrt(np.diff(bundle2[idx_closest1:idx_closest2, 0], axis=0) ** 2 + \
-                        np.diff(bundle2[idx_closest1:idx_closest2, 1], axis=0) ** 2)) 
+    d_along = np.sum(np.sqrt(np.diff(bundle2[idx_closest1:, 0], axis=0) ** 2 + \
+                        np.diff(bundle2[idx_closest1:, 1], axis=0) ** 2)) 
     d_ret = np.sqrt((e1x - e2x)**2 + (e1y-e2y)**2)
 
     return [d_ret, d_across, d_along]
-
 
 def dist_across_along_axonal(e1x, e1y, e2x, e2y, bundle1, bundle2):    
     # extend streaks all the way to raphe and find the distance in between 
