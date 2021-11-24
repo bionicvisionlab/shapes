@@ -318,8 +318,8 @@ class BiphasicAxonMapEstimator(AxonMapEstimator):
         # fit linear regression
         lr = LinearRegression()
         lr.fit(amps, sizes)
-        # rescale so that amp=1.25 is normalized
-        s_norm = lr.predict(np.array(1.25).reshape(1, -1))[0]
+        # rescale so that amp=2 is normalized
+        s_norm = lr.predict(np.array(2).reshape(1, -1))[0]
         sizes_scaled = sizes / s_norm
         lr = LinearRegression()
         lr.fit(amps, sizes_scaled)
@@ -339,8 +339,8 @@ class BiphasicAxonMapEstimator(AxonMapEstimator):
         self.model.set_params(fit_params)
         # update model with params sent to us from PSO
         self.model.set_params(self.get_params())
-        # Make sure 1.25 * a5 + a6 = 1
-        self.a6 = 1 - 1.25 * self.a5
+        # Make sure 2 * a5 + a6 = 1
+        self.a6 = 1 - 2 * self.a5
         self.model.a6 = self.a6
         self.model.build()
         return self
