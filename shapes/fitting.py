@@ -351,7 +351,6 @@ class BiphasicAxonMapEstimator(AxonMapEstimator):
                                              self.model.rho,
                                              self.model.axlambda,
                                              self.model.a5,
-                                             self.model.a6,
                                              self.null_props))
 
 
