@@ -115,6 +115,7 @@ def model_from_params(subject_params, biphasic=True, offset=(0, 0, 0)):
     }
     if biphasic:
         model = BiphasicAxonMapModel(**model_args)
+        model.a4 = 0
     else:
         model = AxonMapModel(**model_args)
     if subject_params['implant_type_str'] == 'ArgusII':
