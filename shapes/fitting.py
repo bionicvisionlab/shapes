@@ -130,7 +130,10 @@ class AxonMapEstimator(BaseEstimator):
         for row in X.itertuples():
             self.implant.stim = Stimulus({row.electrode1 : BiphasicPulseTrain(row.freq, row.amp1, row.pdur, stim_dur=math.ceil(3*row.pdur))})
             percept = self.model.predict_percept(self.implant)
-            y_pred.append(percept.get_brightest_frame())
+            p = percept.get_brightest_frame()
+            if self.yshape is not None and self.resize:
+                p = resize(p, self.yshape, anti_aliasing=True)
+            y_pred.append(p)
         return pd.Series(y_pred, index=X.index)
 
     def print_score(self, mses, score):
@@ -175,8 +178,7 @@ class AxonMapEstimator(BaseEstimator):
 
     def compute_moments(self, y, fit_scaler=True, shape=None, threshold=None):
         y = np.array(y)
-        if shape is not None and self.resize:
-            y = [resize(img, shape, anti_aliasing=True) for img in y]
+        
         if self.mse_params == ['moments_central']:
             props = [0.0 for p in y] # anything but none
         else:
