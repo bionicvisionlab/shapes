@@ -81,7 +81,7 @@ subject_params = {
     }
 }
 
-def model_from_params(subject_params, biphasic=True, offset=(0, 0, 0)):
+def model_from_params(subject_params, model=None, biphasic=True, offset=(0, 0, 0)):
     """ 
     Creates an p2p.implants.Argus implant based on a dictionary of subject
     specific implant parameters.
@@ -94,12 +94,14 @@ def model_from_params(subject_params, biphasic=True, offset=(0, 0, 0)):
         Use BiphasicAxonMapModel, as opposed to AxonMapModel. Defaults to true
     offset : tuple (x, y, rot), optional
         Offset from specified implant location, in (microns, microns, degrees)
-    
+    model : p2p.models.*
+        If passed, instead of making a new model the existing model is modified 
+        to be patient specific
     Returns:
     -----------
     implant : p2p.implants.ArgusI or p2p.implants.ArgusII
         Specified implant with subject specific params
-    model :   p2p.models.BiphasicAxonMapModel
+    model :   p2p.models.*
         Subject specific model
     """
 
@@ -113,11 +115,16 @@ def model_from_params(subject_params, biphasic=True, offset=(0, 0, 0)):
         'yrange' : (subject_params['ymin'], subject_params['ymax']),
         'loc_od' : (subject_params['loc_od_x'], subject_params['loc_od_y'])
     }
-    if biphasic:
-        model = BiphasicAxonMapModel(**model_args)
-        model.a4 = 0
+    if model is None:
+        if biphasic:
+            model = BiphasicAxonMapModel(**model_args)
+            model.a4 = 0
+        else:
+            model = AxonMapModel(**model_args)
     else:
-        model = AxonMapModel(**model_args)
+        # user supplied a model, so just fill in params
+        for param, val in model_args.items():
+            setattr(model, param, val)
     if subject_params['implant_type_str'] == 'ArgusII':
         implant = ArgusII(**implant_args)
     elif subject_params['implant_type_str'] == 'ArgusI':

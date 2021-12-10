@@ -9,7 +9,7 @@ from skimage.transform import resize
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import r2_score
 
-from pulse2percept.models import BiphasicAxonMapModel, AxonMapModel
+from pulse2percept.models import BiphasicAxonMapModel, AxonMapModel, Nanduri2012Temporal, Model, nanduri2012
 from pulse2percept.model_selection import ParticleSwarmOptimizer
 from pulse2percept.implants import ArgusII
 from pulse2percept.stimuli import BiphasicPulseTrain, Stimulus
@@ -231,6 +231,9 @@ class AxonMapEstimator(BaseEstimator):
         self._mse_params = new_mse_params
         if shape is None:
             self.yshape = y[0].shape
+        else:
+            if self.yshape is None:
+                self.yshape = y[0].shape
 
         if self.scale_features and fit_scaler: 
             # fit the scaler
@@ -355,6 +358,84 @@ class BiphasicAxonMapEstimator(AxonMapEstimator):
                                              self.model.a5,
                                              self.null_props))
 
+
+class NanduriAxonMapEstimator(AxonMapEstimator):
+    """
+    Estimates parameters for Nanduri Temporal with Axon Map spatial
+    
+    Parameters:
+    -------------
+    implant : p2p.implant, optional
+        A patient specific implant. Will default to ArgusII with no rotation.
+    model : p2p.models.Model with nanduri2012 temporal and AxonMap spatial, optional
+        A patient specific model.
+    mse_params: list of skimage regionprops params, optional
+        The parameters to use to compute MSE. Each must be a valid parameter of skimage.measure.regionprops
+        Defaults to ellipse major and minor axis.
+        Note that due to scale differences between parameters, each will be transformed to have mean 0 and variance 1
+    feature_importance : list of floats, optional
+        Relative MSE weight for each loss param. 
+        Note that this applies AFTER scaling mean to 0 and variance to 1 (if scale_features is true). 
+        Thus, a value of 2 means the corresponding feature is twice as important as any feature with value 1
+        Defaults to equal weighting
+    scale_features : bool, optional
+        Whether or not to scale features to have 0 mean and 1 variance. 
+        Defaults to true
+        Warning: If this is false, then feature_importances should be updated to reflect the difference in scale
+        between different features
+    """
+    def __init__(self, mse_params=None, feature_importance=None, implant=None, model=None, loss_fn='mse',
+                 scale_features=True, threshold='compute', resize=True, verbose=True, **kwargs):
+        if model is None:
+            model = Model(spatial=AxonMapModel(xystep=0.5), temporal=Nanduri2012Temporal())
+        super(NanduriAxonMapEstimator, self).__init__(verbose=verbose, 
+                             feature_importance=feature_importance, 
+                             mse_params=mse_params,
+                             implant=implant, 
+                             model=model, 
+                             scale_features=scale_features, 
+                             threshold=threshold,
+                             resize=resize,
+                             loss_fn=loss_fn,
+                             **kwargs)
+        self.tau1 = self.model.tau1
+        self.tau2 = self.model.tau2
+        self.tau3 = self.model.tau3
+        self.eps = self.model.eps
+        self.asymptote = self.model.asymptote
+        self.shift = self.model.shift
+        self.slope = self.model.slope 
+
+    def get_params(self, deep=False):
+        params = {
+            attr : getattr(self, attr) for attr in \
+                ['rho', 'axlambda', 'tau1', 'tau2', 'tau3', 'eps', 'asymptote', 'shift', 'slope']
+        }
+        return params
+
+    def predict(self, X):
+        y_pred = []
+        for row in X.itertuples():
+            self.implant.stim = Stimulus({row.electrode1 : BiphasicPulseTrain(row.freq, row.amp1, row.pdur)})
+            percept = self.model.predict_percept(self.implant)
+            p = percept.get_brightest_frame()
+            if self.yshape is not None and self.resize:
+                p = resize(p, self.yshape, anti_aliasing=True)
+            y_pred.append(p)
+        return pd.Series(y_pred, index=X.index)
+
+    def print_score(self, mses, score):
+        print(('score:%.3f, rho:%.1f, lam:%.1f, tau1:%.2f, tau2:%.2f, tau3:%.2f, eps:%.2f, asym:%.2f, slope:%.1f, shift:%.1f, scores: ' + str(mses)) % 
+                                            (score,
+                                             self.model.rho,
+                                             self.model.axlambda,
+                                             self.model.tau1,
+                                             self.model.tau2,
+                                             self.model.tau3,
+                                             self.model.eps,
+                                             self.model.asymptote,
+                                             self.model.slope,
+                                             self.model.shift))
 
 
         
