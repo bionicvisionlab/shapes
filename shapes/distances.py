@@ -93,6 +93,12 @@ def dist_perpendicular_tangential(electrode1, electrode2, implant, model, strate
         dists[use_e1] = np.stack([dret[use_e1], dperp1[use_e1], dtan1[use_e1]], axis=1)
         dists[~use_e1] = np.stack([dret[~use_e1], dperp2[~use_e1], dtan2[~use_e1]], axis=1)
         return dists
+    elif strategy == 'downstream':
+        use_e1 = e1_x < e1_y
+        dists = np.zeros((len(e1_x), 3))
+        dists[use_e1] = np.stack([dret[use_e1], dperp1[use_e1], dtan1[use_e1]], axis=1)
+        dists[~use_e1] = np.stack([dret[~use_e1], dperp2[~use_e1], dtan2[~use_e1]], axis=1)
+        return dists
     else:
         raise NotImplementedError()
 
