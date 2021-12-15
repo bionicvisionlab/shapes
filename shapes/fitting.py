@@ -130,7 +130,7 @@ class AxonMapEstimator(BaseEstimator):
         for row in X.itertuples():
             self.implant.stim = Stimulus({row.electrode1 : BiphasicPulseTrain(row.freq, row.amp1, row.pdur, stim_dur=math.ceil(3*row.pdur))})
             percept = self.model.predict_percept(self.implant)
-            p = percept.get_brightest_frame()
+            p = percept.max(axis='frames')
             if self.yshape is not None and self.resize:
                 p = resize(p, self.yshape, anti_aliasing=True)
             y_pred.append(p)
