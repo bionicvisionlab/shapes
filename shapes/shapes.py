@@ -38,7 +38,9 @@ subject_params = {
         'xmin': -36.9,
         'xmax': 36.9,
         'ymin': -36.9,
-        'ymax': 36.9
+        'ymax': 36.9,
+        'rho':410,
+        'axlambda':1190
     },
     '12-005': {
         'subject_id': 'S2',
@@ -51,7 +53,9 @@ subject_params = {
         'xmin': -30,
         'xmax': 30,
         'ymin': -22.5,
-        'ymax': 22.5
+        'ymax': 22.5,
+        'rho' : 315,
+        'axlambda': 500
     },
     '51-009': {
         'subject_id': 'S3',
@@ -64,7 +68,9 @@ subject_params = {
         'xmin': -32.5,
         'xmax': 32.5,
         'ymin': -24.4,
-        'ymax': 24.4
+        'ymax': 24.4,
+        'rho':144,
+        'axlambda':1414
     },
     '52-001': {
         'subject_id': 'S4',
@@ -77,7 +83,9 @@ subject_params = {
         'xmin': -32,
         'xmax': 32,
         'ymin': -24,
-        'ymax': 24
+        'ymax': 24,
+        'rho':437,
+        'axlambda':1420
     }
 }
 
@@ -113,7 +121,9 @@ def model_from_params(subject_params, model=None, biphasic=True, offset=(0, 0, 0
     model_args = {
         'xrange' : (subject_params['xmin'], subject_params['xmax']),
         'yrange' : (subject_params['ymin'], subject_params['ymax']),
-        'loc_od' : (subject_params['loc_od_x'], subject_params['loc_od_y'])
+        'loc_od' : (subject_params['loc_od_x'], subject_params['loc_od_y']),
+        'rho' : subject_params['rho'],
+        'axlambda' : subject_params['axlambda']
     }
     if model is None:
         if biphasic:
