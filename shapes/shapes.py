@@ -55,7 +55,7 @@ subject_params = {
         'ymin': -22.5,
         'ymax': 22.5,
         'rho' : 315,
-        'axlambda': 500
+        'axlambda': 500,
     },
     '51-009': {
         'subject_id': 'S3',
