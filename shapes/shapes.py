@@ -197,7 +197,7 @@ def _hdf2df(hdf_file, desired_subjects=None):
 
 
 def load_shapes(h5file, subjects=None, stim_class=['SingleElectrode', 'MultiElectrode'], implant=None,
-                experimentID=None, shuffle=False, random_state=42):
+                experimentID=None, shuffle=False, random_state=42, combine=False):
     """
     Loads shapes from h5 file created from data-warehouse script
 
@@ -221,6 +221,9 @@ def load_shapes(h5file, subjects=None, stim_class=['SingleElectrode', 'MultiElec
         experiments
     shuffle : boolean, optional
         If true, shuffle the data
+    combine : boolean, optional
+        If true, aggregates the many step and CDL stim classes into one "step" and 
+        one "CDL" class 
     """
     if not has_h5py:
         raise ImportError("You do not have h5py installed. "
@@ -265,6 +268,9 @@ def load_shapes(h5file, subjects=None, stim_class=['SingleElectrode', 'MultiElec
         # dont error here if one in list isn't present in df
         df = df[df['experiment'].isin(experimentID)]
 
+    if combine:
+        df.loc[df['stim_class'].str.contains('Step'), 'stim_class'] = "Step"
+        df.loc[df['stim_class'].str.contains('CDL'), 'stim_class'] = "CDL"
     if shuffle:
         df = df.sample(n=len(df), random_state=random_state)
     return df.reset_index(drop=True)
