@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
 from pulse2percept.implants import ArgusII
+from pulse2percept.models import AxonMapModel
+import numpy as np
 from shapes import load_shapes, subject_params, model_from_params
 
 class VisualPerceptsGUI:
@@ -12,8 +14,10 @@ class VisualPerceptsGUI:
         self.current_dataset = None
         self.subject_combobox = None
         self.implant = ArgusII()
+        self.model = AxonMapModel().build()
         self.master = master
-        self.valid_electrodes = None
+        self.valid_electrodes = []
+        self.selected_electrodes = set()
 
         master.title("Visual Percepts GUI")
         self.width = master.winfo_width()
@@ -187,7 +191,7 @@ class VisualPerceptsGUI:
             self.current_dataset = self.current_dataset[self.current_dataset['subject'] == subject]
             # update the implant representation
             if subject in subject_params:
-                self.implant, _ = model_from_params(subject_params[subject], biphasic=False)
+                self.implant, self.model = model_from_params(subject_params[subject], biphasic=False)
         
         # select by stim class
         selected_stim_classes = [i for i in self.stim_class_vars.keys() if self.stim_class_vars[i].get()]
@@ -201,11 +205,17 @@ class VisualPerceptsGUI:
                 if selected_stim_param_options != ['None']:
                     self.current_dataset = self.current_dataset[self.current_dataset[stim_param].isin(selected_stim_param_options)]
 
+        # select by selected electrodes
+        if len(self.selected_electrodes) > 0:
+            def contains(row, elec):
+                return elec in row['electrodes']
+            for elec in self.selected_electrodes:
+                self.current_dataset = self.current_dataset[self.current_dataset.apply(lambda row : contains(row, elec), axis=1)]
+
         # update valid electrodes
         self.valid_electrodes = list(self.current_dataset['electrode1'].unique())
         if refresh:
             self.refresh_options()
-        print(f"Filtered to a dataset of length {len(self.current_dataset)}")
 
 
     def load_file(self):
@@ -266,34 +276,72 @@ class VisualPerceptsGUI:
         # Create a canvas to draw on
         canvas_width = 450
         canvas_height = 450
+        r = 15
         self.implant_canvas = tk.Canvas(panel, width=canvas_width, height=canvas_height, bg='white', highlightthickness=0)
         self.implant_canvas.pack(expand=tk.YES, fill=tk.BOTH)
 
+        # Draw each axon bundle as a curved line
+        axon_bundles = self.model.grow_axon_bundles(n_bundles=100, prune=False)
+        for bundle in axon_bundles[:25] + axon_bundles[-25:]:
+            curve_points = []
+            for i in range(bundle.shape[0]):
+                # transform to scene coordinates
+                x = (bundle[i, 0] - min_x) / resize * 400 + 25
+                y = (bundle[i, 1] - min_y) / resize * 400 + r
+                curve_points.append(x)
+                curve_points.append(y)
+            if len(curve_points) >= 4:
+                self.implant_canvas.create_line(curve_points, smooth=True, width=2, fill='gray75')
+
+
         # Draw each electrode as a white circle with black border
         for e in electrode_names:
-            r = 15
+            # transform to scene coordinates
             x = (electrodes[e].x - min_x) / resize * 400 + 25 
             y = (electrodes[e].y - min_y) / resize * 400 + r
             
-            if self.valid_electrodes is None or e in self.valid_electrodes:
+            if e in self.selected_electrodes:
+                fill = 'green'
+            elif self.valid_electrodes is None or e in self.valid_electrodes:
                 fill = 'white'
             else:
                 fill = 'gray'
             circle = self.implant_canvas.create_oval(x-r, y-r, x+r, y+r, outline='black', fill=fill)
             text = self.implant_canvas.create_text(x, y, text=e, font=("Arial", 10))
 
-            # Bind the blue color on hover event to the electrode circle and text
-            def set_color_blue(event, circle=circle, text=text):
+            # Bind the green color on hover event to the electrode circle and text
+            def set_color_green(event, circle=circle, text=text):
                 self.implant_canvas.itemconfig(circle, fill='green')
             
             def set_color_white(event, circle=circle, text=text):
                 self.implant_canvas.itemconfig(circle, fill='white')
 
-            if self.valid_electrodes is None or e in self.valid_electrodes:
-                self.implant_canvas.tag_bind(circle, '<Enter>', set_color_blue)
-                self.implant_canvas.tag_bind(circle, '<Leave>', set_color_white)
-                self.implant_canvas.tag_bind(text, '<Enter>', set_color_blue)
-                self.implant_canvas.tag_bind(text, '<Leave>', set_color_white)
+            def call_electrode_selected(event, circle=circle, text=text, e=e):
+                if e in self.selected_electrodes:
+                    self.electrode_deselected(e, circle)
+                else:
+                    self.electrode_selected(e, circle)
+
+            if (self.valid_electrodes is None or e in self.valid_electrodes):
+                if e not in self.selected_electrodes:
+                    self.implant_canvas.tag_bind(circle, '<Enter>', set_color_green)
+                    self.implant_canvas.tag_bind(circle, '<Leave>', set_color_white)
+                    self.implant_canvas.tag_bind(text, '<Enter>', set_color_green)
+                    self.implant_canvas.tag_bind(text, '<Leave>', set_color_white)
+                self.implant_canvas.tag_bind(circle, '<Button-1>', call_electrode_selected)
+                self.implant_canvas.tag_bind(text, '<Button-1>', call_electrode_selected)
+
+    def electrode_selected(self, e, circle):
+        print("calling select")
+        self.selected_electrodes.add(e)
+        self.update_current_dataset_no_event()
+        # self.implant_canvas.itemconfig(circle, fill='green')
+    
+    def electrode_deselected(self, e, circle):
+        print('calling deselect')
+        self.selected_electrodes.remove(e)
+        self.update_current_dataset_no_event()
+        # self.implant_canvas.itemconfig(circle, fill='white')
 
 root = tk.Tk()
 gui = VisualPerceptsGUI(root)

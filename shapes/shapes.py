@@ -268,6 +268,23 @@ def load_shapes(h5file, subjects=None, stim_class=['SingleElectrode', 'MultiElec
         # dont error here if one in list isn't present in df
         df = df[df['experiment'].isin(experimentID)]
 
+    def electrodes(row):
+        electrodes = []
+        if row['electrode1']:
+            electrodes.append(row['electrode1'])
+        if row['electrode2']:
+            electrodes.append(row['electrode2'])
+        return electrodes
+    def num_electrodes(row):
+        num = 0
+        if row['electrode1']:
+            num += 1
+        if row['electrode2']:
+            num += 1
+        return num
+    df['electrodes'] = df.apply(lambda row : electrodes(row), axis=1)
+    df['n_electrodes'] = df.apply(lambda row : num_electrodes(row), axis=1)
+
     if combine:
         df.loc[df['stim_class'].str.contains('Step'), 'stim_class'] = "Step"
         df.loc[df['stim_class'].str.contains('CDL'), 'stim_class'] = "CDL"
