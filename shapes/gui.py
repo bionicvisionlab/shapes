@@ -2,9 +2,12 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
 from pulse2percept.implants import ArgusII
-from pulse2percept.models import AxonMapModel
+from pulse2percept.models import AxonMapModel, BiphasicAxonMapModel
 import numpy as np
-from shapes import load_shapes, subject_params, model_from_params
+import pulse2percept as p2p
+from PIL import Image, ImageTk
+import cv2
+from shapes import load_shapes, subject_params, model_from_params, average_images
 
 class VisualPerceptsGUI:
     def __init__(self, master):
@@ -18,6 +21,8 @@ class VisualPerceptsGUI:
         self.master = master
         self.valid_electrodes = []
         self.selected_electrodes = set()
+        # add other models here
+        self.display_models = []#['patient']
 
         master.title("Visual Percepts GUI")
         self.width = master.winfo_width()
@@ -75,6 +80,9 @@ class VisualPerceptsGUI:
         # Create implant representation on the left panel
         self.create_implant_representation()
 
+        # diplay percepts
+        self.display_percepts()
+
         # Set resize callback
         master.bind("<Configure>", self.on_resize)
 
@@ -96,13 +104,17 @@ class VisualPerceptsGUI:
         if self.subject_combobox is None:
             self.subject_combobox = ttk.Combobox(self.subject_frame, values=self.subjects, textvariable=self.subject)
             self.subject_combobox.pack(padx=10, pady=10)
-            self.subject_combobox.bind("<<ComboboxSelected>>", self.update_current_dataset)
+            self.subject_combobox.bind("<<ComboboxSelected>>", self.subject_selected)
         else:
             self.subject_combobox['values'] = self.subjects
             self.subject_combobox['textvariable'] = self.subject
             if self.loaded_percepts:
                 self.update_current_dataset(None, refresh=False)
     
+    def subject_selected(self, event):
+        self.selected_electrodes.clear()
+        self.update_current_dataset(event)
+
     def display_stim_classes(self):
         if not self.loaded_percepts:
             self.stim_classes = []
@@ -245,6 +257,7 @@ class VisualPerceptsGUI:
         for stim_param, name in zip(self.stim_params, self.stim_params_names):
             self.diplay_stim_param(stim_param, name)
         self.create_implant_representation()
+        self.display_percepts()
         
 
     def on_resize(self, event):
@@ -281,17 +294,18 @@ class VisualPerceptsGUI:
         self.implant_canvas.pack(expand=tk.YES, fill=tk.BOTH)
 
         # Draw each axon bundle as a curved line
-        axon_bundles = self.model.grow_axon_bundles(n_bundles=100, prune=False)
-        for bundle in axon_bundles[:25] + axon_bundles[-25:]:
-            curve_points = []
-            for i in range(bundle.shape[0]):
-                # transform to scene coordinates
-                x = (bundle[i, 0] - min_x) / resize * 400 + 25
-                y = (bundle[i, 1] - min_y) / resize * 400 + r
-                curve_points.append(x)
-                curve_points.append(y)
-            if len(curve_points) >= 4:
-                self.implant_canvas.create_line(curve_points, smooth=True, width=2, fill='gray75')
+        if isinstance(self.model, (AxonMapModel, BiphasicAxonMapModel)):
+            axon_bundles = self.model.grow_axon_bundles(n_bundles=100, prune=False)
+            for bundle in axon_bundles[:25] + axon_bundles[-25:]:
+                curve_points = []
+                for i in range(bundle.shape[0]):
+                    # transform to scene coordinates
+                    x = (bundle[i, 0] - min_x) / resize * 400 + 25
+                    y = (bundle[i, 1] - min_y) / resize * 400 + r
+                    curve_points.append(x)
+                    curve_points.append(y)
+                if len(curve_points) >= 4:
+                    self.implant_canvas.create_line(curve_points, smooth=True, width=2, fill='gray75')
 
 
         # Draw each electrode as a white circle with black border
@@ -335,13 +349,103 @@ class VisualPerceptsGUI:
         print("calling select")
         self.selected_electrodes.add(e)
         self.update_current_dataset_no_event()
-        # self.implant_canvas.itemconfig(circle, fill='green')
     
     def electrode_deselected(self, e, circle):
         print('calling deselect')
         self.selected_electrodes.remove(e)
         self.update_current_dataset_no_event()
-        # self.implant_canvas.itemconfig(circle, fill='white')
+
+    def display_percepts(self):
+        self.percepts_panel.delete("all")  # clear any existing items on canvas
+        if not self.loaded_percepts or len(self.selected_electrodes) == 0:
+            text = "Please load a dataset and select an electrode to view percepts"
+            self.percepts_panel.create_text(700, 400, text=text, font=("Arial", 14), fill="gray")
+            return
+        
+        # Create a vertical scroll window within the percepts_panel
+        print(self.percepts_panel.winfo_width(), self.percepts_panel.winfo_height(), 'h+w')
+
+        percepts_frame = tk.Frame(self.percepts_panel, bg="white", width=800, height=800)
+        percepts_canvas = tk.Canvas(percepts_frame, bg="white")
+        scrollbar = tk.Scrollbar(percepts_frame, orient="vertical", command=percepts_canvas.yview)
+        percepts_canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y", expand=True)
+        percepts_canvas.pack(side="left", fill="both", expand=True)
+        percepts_canvas.bind('<Configure>', lambda e: percepts_canvas.configure(scrollregion=percepts_canvas.bbox("all")))
+        percepts_window = self.percepts_panel.create_window((0, 0), window=percepts_frame, anchor="nw")
+
+        # current_dataset has all percepts containing atleast the selected electrodes. 
+        # Remove those with extra electrodes
+        df = self.current_dataset[self.current_dataset['n_electrodes'] == len(self.selected_electrodes)]
+        groupby_params = ['stim_class'] + [i for i in self.stim_params] + ['amp2', 'elec_delay'] 
+
+        # this creates a multiindex, where each entry will be a row to display
+        groups = df.groupby(groupby_params).count().index
+        for group in groups:
+            conds = [df[groupby_params[i]] == group[i] for i in range(len(groupby_params))]
+            df_group = df.loc[np.logical_and.reduce(conds)]
+
+            # Create a header with the title str(conds)
+            header_text = f"{group[0]} {group[2]}xTh {group[1]:.0f}Hz {group[3]:.2f}ms"
+            if len(self.selected_electrodes) > 1:
+                header_text += f" {group[4]}xTh {group[5]}ms delay"
+            header = tk.Label(percepts_canvas, text=header_text, font=("Arial", 12), bg="white", anchor='w')
+            header.pack(side="top", fill="both")
+
+            # for each image in df_group['image'], display the image. 
+            # Create a new frame for each group of percepts
+            percept_frame = tk.Frame(percepts_canvas, bg="white")
+            percept_frame.pack(side="top", fill="both")
+            
+            trim = 100
+            combined_image = average_images(df_group['image'])
+            img = 255 * combined_image[trim:-trim, trim:-trim]
+            img = cv2.putText(img=np.stack([img, img, img], axis=-1), text="Average", org=(5,25), fontFace=0, fontScale=1, color=(255,0,0), thickness=2)
+            img = ImageTk.PhotoImage(Image.fromarray(img.astype(np.uint8)).resize((125, 96)))
+            label = tk.Label(percept_frame, image=img)
+            label.image = img
+            label.pack(side="left", padx=5, pady=5)
+
+            for model in self.display_models:
+                if model == 'patient':
+                    model = self.model
+                if not model.is_built:
+                    print('building model')
+                    model.build()
+                if isinstance(model, AxonMapModel) and not isinstance(model, BiphasicAxonMapModel):
+                    # smaller stim
+                    stim = {df_group['electrode1'].iloc[0] : df_group['amp1'].iloc[0]}
+                    if (e2:=df_group['electrode2'].iloc[0]) != '':
+                        stim[e2] = df_group['amp2'].iloc[0]
+                elif isinstance(self.implant, ArgusII):
+                    stim = {df_group['electrode1'].iloc[0] : p2p.stimuli.BiphasicPulseTrain(df_group['freq'].iloc[0], df_group['amp1'].iloc[0], df_group['pdur'].iloc[0])}
+                    if (e2:=df_group['electrode2'].iloc[0]) != '':
+                        stim[e2] = p2p.stimuli.BiphasicPulseTrain(df_group['freq'].iloc[0], df_group['amp2'].iloc[0], df_group['pdur'].iloc[0])
+                else:
+                    # Cortivis, TODO
+                    raise NotImplementedError
+                
+                self.implant.stim = stim
+                img = model.predict_percept(self.implant).max(axis='frames')
+                img /= img.max() # rescale output [0-1]
+                img = cv2.resize(img, (384, 512))
+                img = 255 * p2p.utils.center_image(img)
+                img = img[trim:-trim, trim:-trim]
+                img = cv2.putText(img=np.stack([img, img, img], axis=-1), text="Model", org=(5,25), fontFace=0, fontScale=1, color=(255,0,0), thickness=2)
+                img = ImageTk.PhotoImage(Image.fromarray(img.astype(np.uint8)).resize((125, 96)))
+                label = tk.Label(percept_frame, image=img)
+                label.image = img
+                label.pack(side="left", padx=5, pady=5)
+
+            # for each image in df_group['image'], display the image.
+            for i, row in df_group.iterrows():
+                trim = 100
+                img = ImageTk.PhotoImage(Image.fromarray(255 * p2p.utils.center_image(row['image'])[trim:-trim, trim:-trim]).resize((125, 96)))
+                label = tk.Label(percept_frame, image=img)
+                label.image = img
+                label.pack(side="left", padx=5, pady=5)
+
+
 
 root = tk.Tk()
 gui = VisualPerceptsGUI(root)
