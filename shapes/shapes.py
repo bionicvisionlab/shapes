@@ -54,8 +54,8 @@ subject_params = {
         'xmax': 30,
         'ymin': -22.5,
         'ymax': 22.5,
-        'rho' : 315,
-        'axlambda': 500,
+        'rho' : 120,
+        'axlambda': 446, # score=1.556
     },
     '51-009': {
         'subject_id': 'S3',
@@ -69,8 +69,8 @@ subject_params = {
         'xmax': 32.5,
         'ymin': -24.4,
         'ymax': 24.4,
-        'rho':144,
-        'axlambda':1414
+        'rho':22,
+        'axlambda':882 # score=2.352
     },
     '52-001': {
         'subject_id': 'S4',
@@ -84,8 +84,8 @@ subject_params = {
         'xmax': 32,
         'ymin': -24,
         'ymax': 24,
-        'rho':437,
-        'axlambda':1420
+        'rho':158,
+        'axlambda':1250 # score=1.272
     }
 }
 
@@ -134,7 +134,8 @@ def model_from_params(subject_params, model=None, biphasic=True, offset=(0, 0, 0
     else:
         # user supplied a model, so just fill in params
         for param, val in model_args.items():
-            setattr(model, param, val)
+            if hasattr(model, param):
+                setattr(model, param, val)
     if subject_params['implant_type_str'] == 'ArgusII':
         implant = ArgusII(**implant_args)
     elif subject_params['implant_type_str'] == 'ArgusI':
@@ -360,9 +361,9 @@ def stack_phosphenes(df, separate_phosphenes=False):
         label_img = label(df['image'][i], connectivity = df['image'][i].ndim)
         props = regionprops(label_img)
         num_regions.append(len(props))
-        lst1.append(props[0].centroid)
+        lst1.append(np.array(props[0].centroid))
         if len(props) > 1:
-            lst2.append(props[1].centroid)
+            lst2.append(np.array(props[1].centroid))
         else:
             lst2.append('')
 
@@ -379,8 +380,13 @@ def stack_phosphenes(df, separate_phosphenes=False):
     data_temp['x_avg'] = x
     data_temp['y_avg'] = y
     data_temp = (data_temp[data_temp['centroid2'] == '']).drop(columns = ['centroid2'])
-    df1 = data_temp.groupby(['subject','amp1','amp2','freq','electrode1','electrode2']).mean()
+    # cols = [i for i in ['centroid1', 'centroid2', 'x_avg', 'y_avg'] if i in data_temp.columns]
+    # print(cols)
+    # print(data_temp[cols].iloc[0])
+    df1 = data_temp.groupby(['subject','amp1','amp2','freq','electrode1','electrode2']).mean().reset_index()
+    df1 = df1.drop(columns=['centroid1'])
     df = df.merge(df1, on=['subject','amp1','amp2','freq','electrode1','electrode2'])
+
 
     df['label'] = 1
     df['group'] = ''

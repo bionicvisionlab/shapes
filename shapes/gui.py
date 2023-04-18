@@ -446,7 +446,7 @@ class VisualPerceptsGUI:
                 label.pack(side="left", padx=5, pady=5)
 
 
-
-root = tk.Tk()
-gui = VisualPerceptsGUI(root)
-root.mainloop()
+if __name__ == '__main__':
+    root = tk.Tk()
+    gui = VisualPerceptsGUI(root)
+    root.mainloop()
