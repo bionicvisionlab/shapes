@@ -54,8 +54,8 @@ subject_params = {
         'xmax': 30,
         'ymin': -22.5,
         'ymax': 22.5,
-        'rho' : 120,
-        'axlambda': 446, # score=1.556
+        'rho' : 122,
+        'axlambda': 461, # from 2023/Epiretinal notebook, score=2.427
     },
     '51-009': {
         'subject_id': 'S3',
@@ -70,7 +70,7 @@ subject_params = {
         'ymin': -24.4,
         'ymax': 24.4,
         'rho':22,
-        'axlambda':882 # score=2.352
+        'axlambda':900 # score=7.707
     },
     '52-001': {
         'subject_id': 'S4',
@@ -85,7 +85,7 @@ subject_params = {
         'ymin': -24,
         'ymax': 24,
         'rho':158,
-        'axlambda':1250 # score=1.272
+        'axlambda':1355 # score=1.147
     }
 }
 
